@@ -4,7 +4,8 @@ import { Typography, Button, Paper, Table, TableBody, TableCell, TableContainer,
 import AddIcon from '@mui/icons-material/Add';
 import axios from 'axios';
 
-const API_URL = 'http://localhost:8000/causas/';
+//const API_URL = 'http://localhost:8000/causas/';
+const API_URL = import.meta.env.VITE_API_URL;
 
 function CausasList() {
   const [causas, setCausas] = useState([]);

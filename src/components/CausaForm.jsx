@@ -3,7 +3,8 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { TextField, Button, Paper, Typography, Grid, CircularProgress, Alert, Dialog, DialogTitle, DialogContent, DialogActions } from '@mui/material';
 import axios from 'axios';
 
-const API_URL = 'http://localhost:8000/causas/';
+//const API_URL = 'http://localhost:8000/causas/';
+const API_URL = import.meta.env.VITE_API_URL;
 
 function emptyCausa() {
   return {
