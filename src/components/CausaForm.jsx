@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import { 
   Box,
   TextField, 
@@ -41,23 +41,51 @@ const tipos = ['civil', 'penal', 'laboral', 'familia'];
 function CausaForm() {
   const { id_causa } = useParams();
   const navigate = useNavigate();
+  const location = useLocation();
   const [causa, setCausa] = useState(emptyCausa());
   const [loading, setLoading] = useState(Boolean(id_causa));
   const [error, setError] = useState(null);
   const [deleteDialog, setDeleteDialog] = useState(false);
-  const isViewMode = new URLSearchParams(window.location.search).get('mode') === 'view';
+  const isViewMode = location.pathname.startsWith('/ver/');
 
   useEffect(() => {
+    console.log('id_causa:', id_causa);
+    console.log('isViewMode:', isViewMode);
+    
     if (id_causa) {
-      axios.get(`${API_URL}/causas/${id_causa}/`, { headers: { 'api-key-auth': import.meta.env.VITE_API_KEY_AUTH } })
-        .then(res => setCausa(res.data))
-        .catch(() => setError('No se pudo cargar la causa'))
+      console.log('Fetching cause with id:', id_causa);
+      axios.get(`${API_URL}/causas/${id_causa}/`, { 
+        headers: { 
+          'api-key-auth': import.meta.env.VITE_API_KEY_AUTH,
+          'Content-Type': 'application/json'
+        },
+        params: { id_causa }  // Asegurarse de que el parámetro se envíe correctamente
+      })
+        .then(res => {
+          console.log('Response data:', res.data);
+          setCausa(res.data);
+        })
+        .catch(err => {
+          console.error('Error fetching cause:', err);
+          setError('No se pudo cargar la causa');
+        })
         .finally(() => setLoading(false));
     } else {
+      console.log('No id_causa, fetching next available ID');
       // Obtener el próximo id_causa solo en modo creación
-      axios.get(`${API_URL}/causas/proximo/id/`, { headers: { 'api-key-auth': import.meta.env.VITE_API_KEY_AUTH } })
+      axios.get(`${API_URL}/causas/proximo/id/`, { 
+        headers: { 
+          'api-key-auth': import.meta.env.VITE_API_KEY_AUTH,
+          'Content-Type': 'application/json'
+        } 
+      })
         .then(res => {
+          console.log('Next ID:', res.data.proximo_id);
           setCausa(prev => ({ ...prev, id_causa: res.data.proximo_id }));
+        })
+        .catch(err => {
+          console.error('Error fetching next ID:', err);
+          setError('No se pudo obtener el próximo ID');
         });
     }
   }, [id_causa]);
@@ -148,26 +176,89 @@ function CausaForm() {
   );
 
   return (
-    <Box sx={{ width: '80%', mx: 'auto', py: 4 }}>
-      <Paper sx={{ p: 4 }}>
-        <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 3 }}>
-          <Typography variant="h4">
-            {id_causa ? (isViewMode ? 'Ver Causa' : 'Editar Causa') : 'Nueva Causa'}
-          </Typography>
-          {isViewMode && (
-            <Button 
-              variant="contained" 
-              color="primary"
-              onClick={() => navigate(`/editar/${id_causa}`)}
-            >
-              Editar
-            </Button>
-          )}
-        </Box>
-        {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
-        <Box component="form" onSubmit={handleSubmit} sx={{ '& .MuiTextField-root': { mb: 2 } }}>
-          <Grid container spacing={2}>
-            <Grid item xs={12} sm={6}>
+    <Box sx={{ 
+      width: '100%',
+      height: '100vh',
+      overflow: 'hidden',
+      display: 'flex',
+      flexDirection: 'column',
+      pt: '64px', // Add padding for the AppBar
+      boxSizing: 'border-box'
+    }}>
+      <Box sx={{ 
+        width: '90%',
+        maxWidth: '1600px',
+        mx: 'auto',
+        py: 2,
+        flex: 1,
+        display: 'flex',
+        flexDirection: 'column',
+        overflow: 'hidden',
+        boxSizing: 'border-box'
+      }}>
+        <Paper sx={{ 
+          p: 4,
+          flex: 1,
+          display: 'flex',
+          flexDirection: 'column',
+          overflow: 'hidden'
+        }}>
+          <Box sx={{ 
+            display: 'flex', 
+            justifyContent: 'space-between', 
+            mb: 3,
+            flexShrink: 0
+          }}>
+            <Typography variant="h4">
+              {id_causa ? (isViewMode ? 'Ver Causa' : 'Editar Causa') : 'Nueva Causa'}
+            </Typography>
+            {isViewMode && (
+              <Button 
+                variant="contained" 
+                color="primary"
+                onClick={() => navigate(`/editar/${id_causa}`)}
+                sx={{ whiteSpace: 'nowrap' }}
+              >
+                Editar
+              </Button>
+            )}
+          </Box>
+          {error && <Alert severity="error" sx={{ mb: 2, flexShrink: 0 }}>{error}</Alert>}
+          <Box 
+            component="form" 
+            onSubmit={handleSubmit} 
+            sx={{ 
+              flex: 1,
+              display: 'flex',
+              flexDirection: 'column',
+              overflow: 'hidden',
+              '& .MuiTextField-root': { 
+                mb: 2 
+              } 
+            }}
+          >
+            <Box sx={{ 
+              overflowY: 'auto', 
+              pr: 2, 
+              flex: 1, 
+              py: 2,
+              pb: 4, // Add more bottom padding
+              '&::-webkit-scrollbar': {
+                width: '6px',
+              },
+              '&::-webkit-scrollbar-track': {
+                background: '#f1f1f1',
+              },
+              '&::-webkit-scrollbar-thumb': {
+                background: '#888',
+                borderRadius: '3px',
+              },
+              '&::-webkit-scrollbar-thumb:hover': {
+                background: '#555',
+              }
+            }}>
+              <Grid container spacing={2}>
+                <Grid item xs={12} sm={6}>
               <TextField
                 fullWidth
                 label="ID Causa"
@@ -247,7 +338,13 @@ function CausaForm() {
               <TextField label="Usuario Responsable" name="usuario_responsable" value={causa.usuario_responsable} onChange={handleChange} fullWidth sx={{ mt: 2 }} disabled={isViewMode} />
             </Grid>
 
-            <Grid item xs={12} sx={{ mt: 2, display: 'flex', gap: 2, justifyContent: 'flex-start' }}>
+            <Grid item xs={12} sx={{ 
+              mt: 2, 
+              mb: 4, // Add bottom margin to the button container
+              display: 'flex', 
+              gap: 2, 
+              justifyContent: 'flex-start' 
+            }}>
               <Button 
                 variant="contained" 
                 color="primary" 
@@ -267,28 +364,30 @@ function CausaForm() {
                 </Button>
               )}
             </Grid>
-          </Grid>
-        </Box>
+              </Grid>
+            </Box>
+          </Box>
 
-        {/* Diálogo de confirmación para eliminar */}
-        <Dialog open={deleteDialog} onClose={() => setDeleteDialog(false)}>
-          <DialogTitle>Confirmar eliminación</DialogTitle>
-          <DialogContent>
-            <Typography>¿Estás seguro de que deseas eliminar esta causa? Esta acción no se puede deshacer.</Typography>
-          </DialogContent>
-          <DialogActions>
-            <Button onClick={() => setDeleteDialog(false)}>Cancelar</Button>
-            <Button 
-              onClick={handleDelete} 
-              color="error"
-              variant="contained"
-              disabled={loading}
-            >
-              {loading ? <CircularProgress size={24} /> : 'Eliminar'}
-            </Button>
-          </DialogActions>
-        </Dialog>
-      </Paper>
+          {/* Diálogo de confirmación para eliminar */}
+          <Dialog open={deleteDialog} onClose={() => setDeleteDialog(false)}>
+            <DialogTitle>Confirmar eliminación</DialogTitle>
+            <DialogContent>
+              <Typography>¿Estás seguro de que deseas eliminar esta causa? Esta acción no se puede deshacer.</Typography>
+            </DialogContent>
+            <DialogActions>
+              <Button onClick={() => setDeleteDialog(false)}>Cancelar</Button>
+              <Button 
+                onClick={handleDelete} 
+                color="error"
+                variant="contained"
+                disabled={loading}
+              >
+                {loading ? <CircularProgress size={24} /> : 'Eliminar'}
+              </Button>
+            </DialogActions>
+          </Dialog>
+        </Paper>
+      </Box>
     </Box>
   );
 }

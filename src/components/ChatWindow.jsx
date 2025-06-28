@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { 
   Box, 
   Typography, 
@@ -11,6 +11,7 @@ import {
 import SendIcon from '@mui/icons-material/Send';
 import SmartToyIcon from '@mui/icons-material/SmartToy';
 import PersonIcon from '@mui/icons-material/Person';
+import AccountCircleIcon from '@mui/icons-material/AccountCircle';
 import axios from 'axios';
 
 const ChatWindow = ({ selectedChat, isConnected, ...props }) => {
@@ -21,12 +22,37 @@ const ChatWindow = ({ selectedChat, isConnected, ...props }) => {
   const messagesEndRef = useRef(null);
   const chatWindowRef = useRef(null);
 
-  // Efecto para manejar el scroll al final de los mensajes
-  useEffect(() => {
+  // Función para hacer scroll al final
+  const scrollToBottom = useCallback((behavior = 'smooth') => {
     if (messagesEndRef.current) {
-      messagesEndRef.current.scrollIntoView({ behavior: 'smooth' });
+      messagesEndRef.current.scrollIntoView({ 
+        behavior,
+        block: 'end',
+        inline: 'nearest'
+      });
     }
-  }, [messages]);
+  }, []);
+
+  // Efecto para manejar el scroll al cargar mensajes iniciales
+  useEffect(() => {
+    if (messages.length > 0) {
+      // Usar requestAnimationFrame para asegurar que el DOM se ha actualizado
+      const rafId = requestAnimationFrame(() => {
+        scrollToBottom('auto');
+      });
+      return () => cancelAnimationFrame(rafId);
+    }
+  }, [selectedChat?.phone_number]);
+  
+  // Efecto para manejar el scroll cuando se agregan nuevos mensajes
+  useEffect(() => {
+    if (messages.length > 0) {
+      const timer = setTimeout(() => {
+        scrollToBottom('smooth');
+      }, 100);
+      return () => clearTimeout(timer);
+    }
+  }, [messages.length]);
 
   // Generar un ID único para el mensaje
   const generateTempId = () => `temp_${Date.now()}_${Math.random().toString(36).substr(2, 6)}`;
@@ -35,125 +61,96 @@ const ChatWindow = ({ selectedChat, isConnected, ...props }) => {
   useEffect(() => {
     const handleNewMessage = (event) => {
       const message = event.detail;
-      console.log('💬 Nuevo mensaje recibido en ChatWindow:', message);
       
-      // Verificar que el mensaje es para el chat actual
-      if (selectedChat?.phone_number === message.phone_number) {
-        console.log('Mensaje para el chat actual, procesando...');
+      // Solo procesar si es para el chat actual y es un nuevo mensaje
+      if (selectedChat?.phone_number === message.phone_number && message.type === 'new_message') {
+        const messageData = message.data || {};
         
         setMessages(prevMessages => {
-          // Extraer datos del mensaje de manera segura
-          const messageData = message.data || {};
-          const messageContent = messageData.content || '';
-          const messageRole = messageData.role || 'assistant';
-          const messageTimestamp = message.timestamp || new Date().toISOString();
-          
-          // Si es un mensaje de confirmación (del backend)
-          if (message.type === 'message_sent' && message.temp_id) {
-            console.log('Actualizando mensaje temporal con ID del servidor:', message.temp_id);
-            // Si ya existe un mensaje con este ID, actualizarlo
-            if (prevMessages.some(msg => msg.id === message.temp_id)) {
-              return prevMessages.map(msg => 
-                msg.id === message.temp_id 
-                  ? { 
-                      ...msg, 
-                      id: message.message_id || msg.id,
-                      status: 'delivered',
-                      timestamp: messageTimestamp
-                    } 
-                  : msg
-              );
-            }
-            // Si no existe, agregar el mensaje del servidor
-            return [...prevMessages, {
-              id: message.message_id || `msg_${Date.now()}`,
-              content: messageContent,
-              role: messageRole,
-              timestamp: messageTimestamp,
-              status: 'delivered'
-            }];
+          // Verificar si ya existe un mensaje con el mismo ID
+          const messageId = message.message_id || `msg_${Date.now()}`;
+          if (prevMessages.some(msg => msg.id === messageId)) {
+            return prevMessages;
           }
           
-          // Si es un mensaje del servidor y no es de confirmación
-          if (message.type === 'new_message') {
-            // Verificar si ya existe un mensaje con el mismo contenido y rol en los últimos 5 segundos
-            const isDuplicate = prevMessages.some(msg => 
-              msg.content === messageContent && 
-              msg.role === messageRole &&
-              Math.abs(new Date(msg.timestamp) - new Date(messageTimestamp)) < 5000
-            );
-            
-            if (isDuplicate) {
-              console.log('Mensaje duplicado detectado, ignorando...');
-              return prevMessages;
-            }
-            
-            // Agregar el nuevo mensaje del servidor
-            console.log('Agregando nuevo mensaje del servidor:', messageContent);
-            return [...prevMessages, {
-              id: message.message_id || `msg_${Date.now()}`,
-              content: messageContent,
-              role: messageRole,
-              timestamp: messageTimestamp,
+          return [
+            ...prevMessages,
+            {
+              id: messageId,
+              content: messageData.content || '',
+              role: messageData.role || 'assistant',
+              timestamp: message.timestamp || new Date().toISOString(),
               status: 'delivered'
-            }];
-          }
-          
-          return prevMessages;
+            }
+          ];
         });
-      } else {
-        console.log('Mensaje no es para el chat actual, ignorando...');
       }
     };
 
-    // Agregar event listener al documento para capturar los eventos de cualquier parte de la aplicación
+    // Agregar event listener al documento
     document.addEventListener('newMessage', handleNewMessage);
-
-    // Limpiar
-    return () => {
-      document.removeEventListener('newMessage', handleNewMessage);
-    };
+    return () => document.removeEventListener('newMessage', handleNewMessage);
   }, [selectedChat?.phone_number]);
 
   // Cargar mensajes cuando se selecciona un chat
   useEffect(() => {
     if (!selectedChat) return;
     
-    console.log('💬 Chat seleccionado:', selectedChat);
+    // Usar requestAnimationFrame para asegurar que el DOM está listo
+    const rafId = requestAnimationFrame(() => {
+      // Si el chat ya tiene mensajes, usarlos
+      if (selectedChat.messages && Array.isArray(selectedChat.messages)) {
+        console.log('Usando mensajes existentes del chat:', selectedChat.messages.length);
+        setMessages(selectedChat.messages);
+      } else if (selectedChat.messages) {
+        console.log('Mensajes del chat (raw):', selectedChat.messages);
+        const messagesArray = Array.isArray(selectedChat.messages) ? selectedChat.messages : [];
+        console.log('Mensajes procesados:', messagesArray);
+        console.log('Primer mensaje (si existe):', messagesArray[0]);
+        setMessages(messagesArray);
+      } else {
+        console.log('No hay mensajes en el chat seleccionado');
+        setMessages([]);
+      }
+      
+      // Forzar un segundo renderizado para asegurar el scroll correcto
+      setTimeout(() => {
+        scrollToBottom('auto');
+      }, 0);
+    });
     
-    // Si el chat ya tiene mensajes, usarlos
-    if (selectedChat.messages && Array.isArray(selectedChat.messages)) {
-      console.log('Usando mensajes existentes del chat:', selectedChat.messages.length);
-      setMessages(selectedChat.messages);
-      return;
-    }
-    setLoading(true);
-    
-    // Usar los mensajes del chat seleccionado
-    if (selectedChat.messages) {
-      console.log('Mensajes del chat (raw):', selectedChat.messages);
-      const messagesArray = Array.isArray(selectedChat.messages) ? selectedChat.messages : [];
-      console.log('Mensajes procesados:', messagesArray);
-      console.log('Primer mensaje (si existe):', messagesArray[0]);
-      setMessages(messagesArray);
-    } else {
-      console.log('No hay mensajes en el chat seleccionado');
-      setMessages([]);
-    }
-    
-    setLoading(false);
+    return () => cancelAnimationFrame(rafId);
   }, [selectedChat]);
 
   // Desplazarse al final de los mensajes cuando se actualizan
   useEffect(() => {
-    scrollToBottom();
-  }, [messages]);
+    // Solo hacer scroll si hay mensajes y el chat está seleccionado
+    if (messages.length > 0 && selectedChat) {
+      const timer = setTimeout(() => {
+        scrollToBottom('auto');
+      }, 50);
+      return () => clearTimeout(timer);
+    }
+  }, [selectedChat?.phone_number]);
+  
+  // Efecto separado para manejar scroll cuando llegan nuevos mensajes
+  useEffect(() => {
+    if (messages.length > 0) {
+      const lastMessage = messages[messages.length - 1];
+      // Solo hacer scroll si el último mensaje es nuevo (menos de 5 segundos)
+      const isNewMessage = lastMessage.timestamp && 
+        (new Date() - new Date(lastMessage.timestamp)) < 5000;
+        
+      if (isNewMessage) {
+        const timer = setTimeout(() => {
+          scrollToBottom('smooth');
+        }, 100);
+        return () => clearTimeout(timer);
+      }
+    }
+  }, [messages.length]);
 
-  const scrollToBottom = () => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  };
-
-  const handleSendMessage = async (e) => {
+  const handleSendMessage = useCallback(async (e) => {
     e.preventDefault();
     if (!newMessage.trim() || !selectedChat) return;
 
@@ -188,7 +185,7 @@ const ChatWindow = ({ selectedChat, isConnected, ...props }) => {
       // Mostrar notificación de error sin modificar el estado de mensajes
       alert('Error al enviar el mensaje. Por favor, inténtalo de nuevo.');
     }
-  };
+  }, [newMessage, selectedChat]);
 
   const formatDateTime = (timestamp) => {
     if (!timestamp) return '';
@@ -230,10 +227,13 @@ const ChatWindow = ({ selectedChat, isConnected, ...props }) => {
         display: 'flex',
         flexDirection: 'column',
         height: '100%',
-        backgroundColor: theme.palette.grey[100],
+        backgroundColor: 'transparent',
         position: 'relative',
+        '& > *': {
+          backgroundColor: 'transparent',
+        },
+        ...props.sx
       }}
-      {...props}
     >
       {selectedChat ? (
         <Box sx={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
@@ -244,11 +244,14 @@ const ChatWindow = ({ selectedChat, isConnected, ...props }) => {
             display: 'flex',
             alignItems: 'center',
             backgroundColor: theme.palette.background.paper,
-            flexShrink: 0
+            flexShrink: 1
           }}>
-            <Typography variant="h6" sx={{ fontWeight: 500 }}>
-              +{selectedChat.phone_number}
-            </Typography>
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+              <AccountCircleIcon color="primary" />
+              <Typography variant="h6" sx={{ fontWeight: 420 }}>
+                +{selectedChat.phone_number}
+              </Typography>
+            </Box>
           </Box>
           
           {/* Área de mensajes con scroll */}
@@ -257,22 +260,33 @@ const ChatWindow = ({ selectedChat, isConnected, ...props }) => {
             overflow: 'hidden',
             display: 'flex',
             flexDirection: 'column',
-            backgroundColor: theme.palette.grey[50]
+            backgroundColor: 'transparent',
+            '& > *': {
+              backgroundColor: 'transparent',
+            }
           }}>
             <Box 
               sx={{
                 flex: 1,
                 p: 2,
                 overflowY: 'auto',
+                backgroundColor: 'transparent',
+                '& > *': {
+                  backgroundColor: 'transparent',
+                },
                 '&::-webkit-scrollbar': {
                   width: '6px',
                 },
                 '&::-webkit-scrollbar-track': {
-                  background: theme.palette.grey[100],
+                  background: 'rgba(0,0,0,0.05)',
+                  borderRadius: '3px',
                 },
                 '&::-webkit-scrollbar-thumb': {
-                  backgroundColor: theme.palette.grey[400],
+                  backgroundColor: 'rgba(0,0,0,0.2)',
                   borderRadius: '3px',
+                  '&:hover': {
+                    backgroundColor: 'rgba(0,0,0,0.3)',
+                  }
                 }
               }}
             >
@@ -401,10 +415,13 @@ const ChatWindow = ({ selectedChat, isConnected, ...props }) => {
           
           {/* Área de entrada de mensajes */}
           <Box sx={{
-            p: 2, 
+            p: 2.5, 
+            pt: 1,  // Reducir el padding superior
             borderTop: `1px solid ${theme.palette.divider}`,
             backgroundColor: theme.palette.background.paper,
-            flexShrink: 0
+            flexShrink: 0,
+            position: 'relative',
+            bottom: '8px'  // Mover el contenedor hacia arriba
           }}>
             <Box 
               component="form" 
@@ -430,23 +447,67 @@ const ChatWindow = ({ selectedChat, isConnected, ...props }) => {
                 }}
                 disabled={!selectedChat || loading}
               />
-              <IconButton 
-                type="submit" 
-                color="primary" 
-                disabled={!newMessage.trim() || loading}
-                sx={{ 
-                  backgroundColor: theme.palette.primary.main,
-                  color: '#fff',
-                  '&:hover': {
-                    backgroundColor: theme.palette.primary.dark,
-                  },
-                  '&:disabled': {
-                    backgroundColor: theme.palette.action.disabledBackground,
-                  }
-                }}
-              >
-                <SendIcon />
-              </IconButton>
+              <Box sx={{ display: 'flex', gap: 1, alignItems: 'center' }}>
+                <IconButton 
+                  type="submit" 
+                  color="primary" 
+                  disabled={!newMessage.trim() || loading}
+                  sx={{ 
+                    backgroundColor: theme.palette.primary.main,
+                    color: '#fff',
+                    height: '40px',
+                    width: '40px',
+                    mb: '2px',
+                    '&:hover': {
+                      backgroundColor: theme.palette.primary.dark,
+                    },
+                    '&:disabled': {
+                      backgroundColor: theme.palette.action.disabledBackground,
+                    }
+                  }}
+                >
+                  <SendIcon />
+                </IconButton>
+                {selectedChat?.locked && (
+                  <IconButton 
+                    size="small"
+                    onClick={async () => {
+                      try {
+                        const response = await axios.put(
+                          `${import.meta.env.VITE_URL_BACKEND}/chats/${selectedChat.phone_number}/toggle-bot`,
+                          {},
+                          {
+                            headers: {
+                              'x-api-key': import.meta.env.VITE_API_KEY_AUTH,
+                              'Content-Type': 'application/json'
+                            }
+                          }
+                        );
+                        if (response.data.success) {
+                          props.onChatUpdate?.({
+                            ...selectedChat,
+                            locked: false
+                          });
+                        }
+                      } catch (error) {
+                        console.error('Error al activar el bot:', error);
+                      }
+                    }}
+                    sx={{ 
+                      color: theme.palette.primary.main,
+                      '&:hover': {
+                        backgroundColor: 'rgba(25, 118, 210, 0.04)',
+                      },
+                      mb: '2px',
+                      height: '40px',
+                      width: '40px',
+                    }}
+                    title="Activar bot"
+                  >
+                    <SmartToyIcon />
+                  </IconButton>
+                )}
+              </Box>
             </Box>
           </Box>
         </Box>

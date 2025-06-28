@@ -302,29 +302,27 @@ function App() {
       <Box 
         component="main" 
         sx={{ 
-          flexGrow: 1, 
-          p: 3,
-          width: { sm: `calc(100% - ${drawerOpen ? 240 : 72}px)` },
-          paddingTop: '100px',
-          maxWidth: '100%',
-          overflowX: 'hidden',
+          position: 'fixed',
+          top: 80, // Altura del AppBar
+          left: { sm: drawerOpen ? 240 : 72 },
+          right: 0,
+          bottom: 0,
+          overflow: 'hidden',
           transition: 'all 0.3s ease-in-out',
-          marginLeft: { sm: `${drawerOpen ? 240 : 72}px` },
           backgroundColor: 'rgba(255, 255, 255, 0.9)',
-          minHeight: '100vh',
           boxSizing: 'border-box',
-          paddingLeft: { xs: '16px', sm: '24px' },
-          paddingRight: { xs: '16px', sm: '24px' },
-          paddingBottom: '24px',
-          borderRadius: '16px 0 0 0',
-          boxShadow: '0 0 20px rgba(0, 0, 0, 0.1)'
+          padding: 0,
+          '& > *': {
+            height: '100%',
+            overflow: 'hidden'
+          }
         }}
       >
         <Routes>
           <Route path="/" element={<CausasList />} />
           <Route path="/nueva" element={<CausaForm />} />
-          <Route path="/editar/:id" element={<CausaForm />} />
-          <Route path="/ver/:id" element={<CausaForm />} />
+          <Route path="/editar/:id_causa" element={<CausaForm />} />
+          <Route path="/ver/:id_causa" element={<CausaForm />} />
           <Route path="/chats" element={<ChatsPage />} />
         </Routes>
       </Box>

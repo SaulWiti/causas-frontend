@@ -74,7 +74,7 @@ function CausasList() {
                         size="small" 
                         color="primary" 
                         sx={{ minWidth: 'auto', p: 1, borderRadius: 2 }}
-                        onClick={() => navigate(`/editar/${causa.id_causa}?mode=view`)}
+                        onClick={() => navigate(`/ver/${causa.id_causa}`)}
                       >
                         <VisibilityIcon fontSize="small" />
                       </Button>

@@ -1,12 +1,11 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { Box, Snackbar, Alert } from '@mui/material';
+import { Box, Snackbar, Alert, Typography } from '@mui/material';
 import ChatsList from '../components/ChatsList';
 import ChatWindow from '../components/ChatWindow';
 
 const ChatsPage = () => {
   const [selectedChat, setSelectedChat] = useState(null);
   const [isConnected, setIsConnected] = useState(false);
-  const [error, setError] = useState(null);
   const ws = useRef(null);
   const reconnectAttempts = useRef(0);
   const maxReconnectAttempts = 5;
@@ -52,35 +51,16 @@ const ChatsPage = () => {
               role: message.data?.role
             });
             
-            // Crear un evento global que pueda ser capturado por cualquier componente
+              // Crear un solo evento global que se propagará a través del DOM
             const messageEvent = new CustomEvent('newMessage', { 
               detail: message,
               bubbles: true,
               cancelable: true
             });
             
-            // Disparar el evento en el documento para que lo capturen los listeners globales
-            console.log('🚀 Disparando evento newMessage global');
+            // Disparar el evento una sola vez en el documento
+            console.log('🚀 Disparando evento newMessage');
             document.dispatchEvent(messageEvent);
-            
-            // También disparar directamente a los componentes específicos por si acaso
-            const chatList = document.querySelector('[data-testid="chats-list"]');
-            if (chatList) {
-              console.log('🎯 Disparando evento a ChatsList');
-              chatList.dispatchEvent(new CustomEvent('newMessage', { 
-                detail: message,
-                bubbles: true 
-              }));
-            }
-            
-            const chatWindow = document.querySelector('[data-testid="chat-window"]');
-            if (chatWindow) {
-              console.log('🎯 Disparando evento a ChatWindow');
-              chatWindow.dispatchEvent(new CustomEvent('newMessage', { 
-                detail: message,
-                bubbles: true 
-              }));
-            }
             
             // Actualizar el estado local si el chat está seleccionado
             if (selectedChat?.phone_number === message.phone_number) {
@@ -125,15 +105,12 @@ const ChatsPage = () => {
           reconnectTimeout.current = setTimeout(() => {
             connectWebSocket();
           }, delay);
-        } else {
-          setError('No se pudo conectar al servidor. Por favor, recarga la página para intentar nuevamente.');
         }
       };
 
       ws.current.onerror = (error) => {
         console.error('❌ Error en la conexión WebSocket:', error);
         setIsConnected(false);
-        setError('Error de conexión con el servidor');
       };
     } catch (err) {
       console.error('❌ Error al crear la conexión WebSocket:', err);
@@ -162,52 +139,66 @@ const ChatsPage = () => {
     setSelectedChat(chat);
   };
 
+  // Efecto para depurar cambios en el estado de conexión
+  useEffect(() => {
+    console.log('🔌 Estado de conexión actualizado:', isConnected ? 'CONECTADO' : 'DESCONECTADO');
+  }, [isConnected]);
+
   return (
     <>
-      <Box sx={{ display: 'flex', height: 'calc(100vh - 64px)' }}>
-        <Box sx={{ width: '30%', height: '100%', borderRight: '1px solid #e0e0e0' }}>
+      <Box sx={{ 
+        display: 'flex', 
+        height: 'calc(100vh - 64px)',
+        background: 'transparent',
+        '& > *': {
+          backgroundColor: 'rgba(255, 255, 255, 0.9)',
+          backdropFilter: 'blur(8px)',
+          WebkitBackdropFilter: 'blur(8px)',
+        }
+      }}>
+        <Box sx={{ 
+          width: '30%', 
+          height: '100%', 
+          borderRight: '1px solid rgba(0, 0, 0, 0.12)',
+          backgroundColor: 'transparent !important',
+          '& > *': {
+            backgroundColor: 'transparent !important',
+          }
+        }}>
           <ChatsList 
             onSelectChat={handleSelectChat} 
             selectedChat={selectedChat} 
+            isConnected={isConnected}
             data-testid="chats-list"
-            sx={{ height: '100%' }}
+            sx={{ 
+              height: '100%',
+              backgroundColor: 'transparent !important',
+            }}
           />
         </Box>
-        <Box sx={{ width: '70%', height: '100%' }}>
+        <Box sx={{ 
+          width: '70%', 
+          height: '100%',
+          backgroundColor: 'transparent !important',
+          '& > *': {
+            backgroundColor: 'transparent !important',
+          }
+        }}>
           <ChatWindow 
             selectedChat={selectedChat} 
             isConnected={isConnected} 
             data-testid="chat-window"
-            sx={{ height: '100%' }}
+            sx={{ 
+              height: '100%',
+              backgroundColor: 'transparent !important',
+              '& > *': {
+                backgroundColor: 'transparent !important',
+              }
+            }}
           />
         </Box>
       </Box>
 
-      {/* Notificación de error */}
-      <Snackbar 
-        open={!!error} 
-        autoHideDuration={6000}
-        onClose={() => setError(null)}
-        anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
-      >
-        <Alert onClose={() => setError(null)} severity="error" sx={{ width: '100%' }}>
-          {error}
-        </Alert>
-      </Snackbar>
-
-      {/* Indicador de conexión */}
-      <Box sx={{
-        position: 'fixed',
-        bottom: 16,
-        right: 16,
-        width: 12,
-        height: 12,
-        borderRadius: '50%',
-        bgcolor: isConnected ? '#4caf50' : '#f44336',
-        border: '2px solid white',
-        boxShadow: '0 0 10px rgba(0,0,0,0.2)',
-        zIndex: 9999
-      }} />
     </>
   );
 };

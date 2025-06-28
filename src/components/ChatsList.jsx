@@ -166,11 +166,35 @@ const ChatsList = ({ onSelectChat, selectedChat, ...props }) => {
       <Box sx={{ 
         p: 2, 
         borderBottom: `1px solid ${theme.palette.divider}`, 
-        flexShrink: 0 // Evita que el encabezado se encoja
+        flexShrink: 0, // Evita que el encabezado se encoja
       }}>
-        <Typography variant="h6" sx={{ fontWeight: 500, mb: 2 }}>
-          WhatsApp
-        </Typography>
+        <Box sx={{ 
+          display: 'flex', 
+          justifyContent: 'space-between', 
+          alignItems: 'center',
+          mb: 2 // Espacio debajo del encabezado
+        }}>
+          <Typography variant="h6" sx={{ fontWeight: 500 }}>
+            Chats
+          </Typography>
+          <Box sx={{ 
+            display: 'flex', 
+            alignItems: 'center', 
+            gap: 0.5,
+            pr: 0.5
+          }}>
+            <Typography variant="caption" color="text.secondary">
+              {props.isConnected ? 'Conectado' : 'Desconectado'}
+            </Typography>
+            <Box sx={{
+              width: 8,
+              height: 8,
+              borderRadius: '50%',
+              bgcolor: props.isConnected ? '#4caf50' : '#f44336',
+              border: '1px solid white'
+            }} />
+          </Box>
+        </Box>
         <TextField
           fullWidth
           size="small"
