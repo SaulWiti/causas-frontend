@@ -1,24 +1,52 @@
 import React, { useEffect, useState } from 'react';
-import { useParams, useNavigate, useLocation } from 'react-router-dom';
+import { useParams, useLocation, useNavigate, Routes, Route } from 'react-router-dom';
 import { 
-  Box,
-  TextField, 
+  Box, 
   Button, 
-  Paper, 
+  TextField, 
   Typography, 
+  MenuItem, 
   Grid, 
+  Card, 
+  CardContent, 
+  Divider, 
   CircularProgress, 
   Alert, 
   Dialog, 
   DialogTitle, 
   DialogContent, 
-  DialogActions 
+  DialogActions,
+  List,
+  ListItem,
+  ListItemIcon,
+  ListItemText,
+  Checkbox,
+  IconButton,
+  Tooltip,
+  Chip,
+  Tabs,
+  Tab,
+  CardHeader,
+  Avatar,
+  Paper,
+  Menu,
+  MenuItem as MuiMenuItem
 } from '@mui/material';
+import EventIcon from '@mui/icons-material/Event';
+import EditIcon from '@mui/icons-material/Edit';
+import VisibilityIcon from '@mui/icons-material/Visibility';
+import AccessTimeIcon from '@mui/icons-material/AccessTime';
+import DeleteIcon from '@mui/icons-material/Delete';
+import MoreVertIcon from '@mui/icons-material/MoreVert';
+import AddIcon from '@mui/icons-material/Add';
+import TareaForm from './TareaForm';
+import { styled } from '@mui/material/styles';
 import axios from 'axios';
 
 const API_URL = import.meta.env.VITE_URL_BACKEND;
 
 function emptyCausa() {
+  const now = new Date().toISOString();
   return {
     id_causa: '',
     titulo: '',
@@ -32,11 +60,16 @@ function emptyCausa() {
     tribunal: { nombre: '', rol_tribunal: '' },
     notas: '',
     usuario_responsable: '',
+    fecha_creacion: now,
+    fecha_ultima_actualizacion: now
   };
 }
 
 const estados = ['ingresada', 'en_tramite', 'resuelta', 'archivada'];
 const tipos = ['civil', 'penal', 'laboral', 'familia'];
+
+// Estado inicial para las tareas
+const tareasIniciales = [];
 
 function CausaForm() {
   const { id_causa } = useParams();
@@ -46,7 +79,98 @@ function CausaForm() {
   const [loading, setLoading] = useState(Boolean(id_causa));
   const [error, setError] = useState(null);
   const [deleteDialog, setDeleteDialog] = useState(false);
+  const [tabValue, setTabValue] = useState(0);
+  const [tareas, setTareas] = useState(tareasIniciales);
+  const [cargandoTareas, setCargandoTareas] = useState(false);
+  const [showTareaForm, setShowTareaForm] = useState(false);
+  const [selectedTareaId, setSelectedTareaId] = useState(null);
+  const [menuAnchorEl, setMenuAnchorEl] = useState(null);
+  const [tareaSeleccionada, setTareaSeleccionada] = useState(null);
+  const menuAbierto = Boolean(menuAnchorEl);
   const isViewMode = location.pathname.startsWith('/ver/');
+
+  const handleTabChange = (event, newValue) => {
+    setTabValue(newValue);
+  };
+
+  const cargarTareas = (idCausa) => {
+    if (!idCausa) return;
+    
+    setCargandoTareas(true);
+    axios.get(`${API_URL}/tareas/causa/${idCausa}/`, { 
+      headers: { 
+        'api-key-auth': import.meta.env.VITE_API_KEY_AUTH,
+        'Content-Type': 'application/json'
+      }
+    })
+      .then(res => {
+        console.log('Tareas cargadas:', res.data);
+        setTareas(Array.isArray(res.data) ? res.data : []);
+      })
+      .catch(err => {
+        console.error('Error cargando tareas:', err);
+        setError('No se pudieron cargar las tareas');
+        setTareas([]);
+      })
+      .finally(() => setCargandoTareas(false));
+  };
+
+  const handleNuevaTarea = () => {
+    setSelectedTareaId('nueva');
+    setShowTareaForm(true);
+  };
+
+  const handleAbrirMenuTarea = (event, tarea) => {
+    event.stopPropagation();
+    setTareaSeleccionada(tarea);
+    setMenuAnchorEl(event.currentTarget);
+  };
+
+  const handleCerrarMenuTarea = () => {
+    setMenuAnchorEl(null);
+    setTareaSeleccionada(null);
+  };
+
+  const handleEditarTarea = (idTarea) => {
+    setSelectedTareaId(idTarea);
+    setShowTareaForm(true);
+    handleCerrarMenuTarea();
+  };
+
+  const handleEliminarTarea = async () => {
+    if (!tareaSeleccionada) return;
+    
+    try {
+      await axios.delete(`${API_URL}/tareas/${tareaSeleccionada.id_tarea}`, {
+        headers: { 'api-key-auth': import.meta.env.VITE_API_KEY_AUTH }
+      });
+      
+      // Actualizar la lista de tareas
+      setTareas(tareas.filter(t => t.id_tarea !== tareaSeleccionada.id_tarea));
+      
+    } catch (error) {
+      console.error('Error al eliminar la tarea:', error);
+      setError('Error al eliminar la tarea');
+    } finally {
+      handleCerrarMenuTarea();
+    }
+  };
+
+  const handleVerTarea = (idTarea) => {
+    setSelectedTareaId(idTarea);
+    setShowTareaForm(true);
+  };
+
+  const handleTareaSaved = () => {
+    cargarTareas(id_causa);
+    setShowTareaForm(false);
+    setSelectedTareaId(null);
+  };
+
+  const handleCancelTarea = () => {
+    setShowTareaForm(false);
+    setSelectedTareaId(null);
+  };
 
   useEffect(() => {
     console.log('id_causa:', id_causa);
@@ -54,16 +178,21 @@ function CausaForm() {
     
     if (id_causa) {
       console.log('Fetching cause with id:', id_causa);
+      setLoading(true);
+      
+      // Cargar datos de la causa
       axios.get(`${API_URL}/causas/${id_causa}/`, { 
         headers: { 
           'api-key-auth': import.meta.env.VITE_API_KEY_AUTH,
           'Content-Type': 'application/json'
         },
-        params: { id_causa }  // Asegurarse de que el parámetro se envíe correctamente
+        params: { id_causa }
       })
         .then(res => {
           console.log('Response data:', res.data);
           setCausa(res.data);
+          // Una vez cargada la causa, cargar las tareas
+          cargarTareas(id_causa);
         })
         .catch(err => {
           console.error('Error fetching cause:', err);
@@ -209,54 +338,143 @@ function CausaForm() {
             mb: 3,
             flexShrink: 0
           }}>
-            <Typography variant="h4">
-              {id_causa ? (isViewMode ? 'Ver Causa' : 'Editar Causa') : 'Nueva Causa'}
-            </Typography>
+            {id_causa ? (
+              <Box sx={{ width: '100%' }}>
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
+                  {isViewMode ? (
+                    <VisibilityIcon color="action" sx={{ fontSize: 28 }} />
+                  ) : (
+                    <EditIcon color="primary" sx={{ fontSize: 28 }} />
+                  )}
+                  <Typography variant="h4" component="span">
+                    {causa.id_causa}
+                  </Typography>
+                </Box>
+                
+                <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1.5, alignItems: 'center' }}>
+                  <Box sx={{
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    backgroundColor: 'rgba(25, 118, 210, 0.08)',
+                    borderRadius: 1,
+                    px: 1.5,
+                    py: 0.5
+                  }}>
+                    <EventIcon color="primary" sx={{ mr: 0.8, fontSize: '1.1rem' }} />
+                    <Typography variant="body2" color="primary">
+                      Creada: {new Date(causa.fecha_creacion).toLocaleDateString('es-ES', {
+                        day: '2-digit',
+                        month: 'short',
+                        year: 'numeric',
+                        hour: '2-digit',
+                        minute: '2-digit'
+                      })}
+                    </Typography>
+                  </Box>
+                  
+                  {causa.fecha_ultima_actualizacion && (
+                    <Box sx={{
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      backgroundColor: 'rgba(158, 158, 158, 0.08)',
+                      borderRadius: 1,
+                      px: 1.5,
+                      py: 0.5
+                    }}>
+                      <AccessTimeIcon color="action" sx={{ mr: 0.8, fontSize: '1.1rem' }} />
+                      <Typography variant="body2" color="text.secondary">
+                        Actualizada: {new Date(causa.fecha_ultima_actualizacion).toLocaleDateString('es-ES', {
+                          day: '2-digit',
+                          month: 'short',
+                          year: 'numeric',
+                          hour: '2-digit',
+                          minute: '2-digit'
+                        })}
+                      </Typography>
+                    </Box>
+                  )}
+                </Box>
+              </Box>
+            ) : (
+              <Typography variant="h4">Nueva Causa</Typography>
+            )}
             {isViewMode && (
-              <Button 
-                variant="contained" 
+              <Button
+                variant="contained"
                 color="primary"
                 onClick={() => navigate(`/editar/${id_causa}`)}
-                sx={{ whiteSpace: 'nowrap' }}
+                sx={{
+                  minWidth: '40px',
+                  width: '40px',
+                  height: '40px',
+                  borderRadius: '50%',
+                  padding: 0,
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  '&:hover': {
+                    backgroundColor: 'primary.dark'
+                  }
+                }}
+                aria-label="Editar causa"
               >
-                Editar
+                <EditIcon />
               </Button>
             )}
           </Box>
           {error && <Alert severity="error" sx={{ mb: 2, flexShrink: 0 }}>{error}</Alert>}
-          <Box 
-            component="form" 
-            onSubmit={handleSubmit} 
-            sx={{ 
-              flex: 1,
-              display: 'flex',
-              flexDirection: 'column',
-              overflow: 'hidden',
-              '& .MuiTextField-root': { 
-                mb: 2 
-              } 
-            }}
-          >
-            <Box sx={{ 
-              overflowY: 'auto', 
-              pr: 2, 
-              flex: 1, 
-              py: 2,
-              pb: 4, // Add more bottom padding
-              '&::-webkit-scrollbar': {
-                width: '6px',
-              },
-              '&::-webkit-scrollbar-track': {
-                background: '#f1f1f1',
-              },
-              '&::-webkit-scrollbar-thumb': {
-                background: '#888',
-                borderRadius: '3px',
-              },
-              '&::-webkit-scrollbar-thumb:hover': {
-                background: '#555',
-              }
-            }}>
+          
+          {/* Pestañas */}
+          <Box sx={{ borderBottom: 1, borderColor: 'divider', mb: 2 }}>
+            <Tabs 
+              value={tabValue} 
+              onChange={handleTabChange} 
+              aria-label="pestañas de causa"
+            >
+              <Tab label="Causa" id="tab-causa" aria-controls="tabpanel-causa" />
+              <Tab label="Tareas" id="tab-tareas" aria-controls="tabpanel-tareas" />
+            </Tabs>
+          </Box>
+          
+          {/* Contenido de las pestañas */}
+          <Box sx={{ flex: 1, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
+            {/* Pestaña de Causa */}
+            <Box
+              role="tabpanel"
+              hidden={tabValue !== 0}
+              id="tabpanel-causa"
+              aria-labelledby="tab-causa"
+              sx={{ flex: 1, overflow: 'auto' }}
+            >
+              <Box 
+                component="form" 
+                onSubmit={handleSubmit} 
+                sx={{ 
+                  '& .MuiTextField-root': { 
+                    mb: 2 
+                  } 
+                }}
+              >
+                <Box sx={{ 
+                  overflowY: 'auto', 
+                  pr: 2, 
+                  flex: 1, 
+                  py: 2,
+                  pb: 4,
+                  '&::-webkit-scrollbar': {
+                    width: '6px',
+                  },
+                  '&::-webkit-scrollbar-track': {
+                    background: '#f1f1f1',
+                  },
+                  '&::-webkit-scrollbar-thumb': {
+                    background: '#888',
+                    borderRadius: '3px',
+                  },
+                  '&::-webkit-scrollbar-thumb:hover': {
+                    background: '#555',
+                  }
+                }}>
               <Grid container spacing={2}>
                 <Grid item xs={12} sm={6}>
               <TextField
@@ -354,17 +572,171 @@ function CausaForm() {
                 {loading ? <CircularProgress size={24} /> : (id_causa ? 'Guardar cambios' : 'Crear causa')}
               </Button>
               {id_causa && !isViewMode && (
-                <Button 
-                  variant="outlined" 
-                  color="error"
-                  onClick={() => setDeleteDialog(true)}
-                  disabled={loading}
-                >
-                  Eliminar
-                </Button>
+                <Tooltip title="Eliminar" arrow>
+                  <Button
+                    variant="outlined"
+                    color="error"
+                    onClick={() => setDeleteDialog(true)}
+                    disabled={loading}
+                    sx={{
+                      minWidth: '40px',
+                      width: '40px',
+                      height: '40px',
+                      borderRadius: '50%',
+                      padding: 0,
+                      '&:hover': {
+                        backgroundColor: 'rgba(211, 47, 47, 0.04)'
+                      }
+                    }}
+                    aria-label="Eliminar causa"
+                  >
+                    <DeleteIcon />
+                  </Button>
+                </Tooltip>
               )}
             </Grid>
-              </Grid>
+                  </Grid>
+                </Box>
+              </Box>
+            </Box>
+            
+            {/* Pestaña de Tareas */}
+            <Box
+              role="tabpanel"
+              hidden={tabValue !== 1}
+              id="tabpanel-tareas"
+              aria-labelledby="tab-tareas"
+              sx={{ flex: 1, overflow: 'auto', p: 2 }}
+            >
+              {showTareaForm ? (
+                <TareaForm 
+                  id_tarea={selectedTareaId}
+                  id_causa={id_causa}
+                  isViewMode={isViewMode}
+                  onSave={handleTareaSaved}
+                  onCancel={handleCancelTarea}
+                  tareas={tareas}
+                />
+              ) : (
+                <Box sx={{ mt: 2 }}>
+                  <Card>
+                    <CardHeader
+                      title="Tareas"
+                      action={
+                        !isViewMode && (
+                          <Button 
+                            variant="contained" 
+                            color="primary" 
+                            startIcon={<AddIcon />}
+                            onClick={handleNuevaTarea}
+                          >
+                            Nueva Tarea
+                          </Button>
+                        )
+                      }
+                    />
+                    <CardContent>
+                      {cargandoTareas ? (
+                        <Box sx={{ display: 'flex', justifyContent: 'center', p: 3 }}>
+                          <CircularProgress />
+                        </Box>
+                      ) : tareas.length === 0 ? (
+                        <Box sx={{ p: 2, textAlign: 'center', color: 'text.secondary' }}>
+                          No hay tareas registradas para esta causa
+                        </Box>
+                      ) : (
+                        <List sx={{ width: '100%', bgcolor: 'background.paper' }}>
+                          {tareas.map((tarea) => (
+                            <ListItem
+                              key={tarea.id_tarea}
+                              button
+                              onClick={() => isViewMode ? handleVerTarea(tarea.id_tarea) : handleEditarTarea(tarea.id_tarea)}
+                              secondaryAction={
+                                <IconButton 
+                                  edge="end" 
+                                  aria-label="opciones"
+                                  onClick={(e) => handleAbrirMenuTarea(e, tarea)}
+                                >
+                                  <MoreVertIcon />
+                                </IconButton>
+                              }
+                              sx={{
+                                '&:hover': {
+                                  backgroundColor: 'action.hover',
+                                  cursor: 'pointer'
+                                }
+                              }}
+                            >
+                              <ListItemIcon>
+                                <Checkbox
+                                  edge="start"
+                                  checked={tarea.estado === 'completada'}
+                                  tabIndex={-1}
+                                  disableRipple
+                                  disabled={isViewMode}
+                                />
+                              </ListItemIcon>
+                              <ListItemText 
+                                primary={tarea.nombre}
+                                secondary={
+                                  <>
+                                    <Box component="span" display="block">{tarea.descripcion}</Box>
+                                    <Box component="span" display="block" sx={{ mt: 0.5 }}>
+                                      <Chip 
+                                        label={tarea.estado.replace('_', ' ')} 
+                                        size="small" 
+                                        color={
+                                          tarea.estado === 'completada' ? 'success' : 
+                                          tarea.estado === 'en_proceso' ? 'primary' : 'default'
+                                        }
+                                        variant="outlined"
+                                        sx={{ mr: 1 }}
+                                      />
+                                      <Typography variant="caption" color="text.secondary">
+                                        Actualizada: {new Date(tarea.fecha_ultima_actualizacion).toLocaleString('es-ES')}
+                                      </Typography>
+                                    </Box>
+                                  </>
+                                }
+                                primaryTypographyProps={{
+                                  style: {
+                                    textDecoration: tarea.estado === 'completada' ? 'line-through' : 'none',
+                                    color: tarea.estado === 'completada' ? 'text.secondary' : 'text.primary',
+                                    fontWeight: 500
+                                  }
+                                }}
+                                sx={{ my: 1 }}
+                              />
+                            </ListItem>
+                          ))}
+                        </List>
+                      )}
+                      
+                      {/* Menú de opciones de tarea */}
+                      <Menu
+                        id="menu-tarea"
+                        anchorEl={menuAnchorEl}
+                        open={menuAbierto}
+                        onClose={handleCerrarMenuTarea}
+                        onClick={(e) => e.stopPropagation()}
+                      >
+                        <MuiMenuItem onClick={() => handleEditarTarea(tareaSeleccionada?.id_tarea)}>
+                          <ListItemIcon>
+                            <EditIcon fontSize="small" />
+                          </ListItemIcon>
+                          <ListItemText>Editar</ListItemText>
+                        </MuiMenuItem>
+                        <MuiMenuItem onClick={handleEliminarTarea} sx={{ color: 'error.main' }}>
+                          <ListItemIcon sx={{ color: 'error.main' }}>
+                            <DeleteIcon fontSize="small" />
+                          </ListItemIcon>
+                          <ListItemText>Eliminar</ListItemText>
+                        </MuiMenuItem>
+                      </Menu>
+                    </CardContent>
+                  </Card>
+                </Box>
+              )}
             </Box>
           </Box>
 

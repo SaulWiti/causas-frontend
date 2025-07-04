@@ -29,85 +29,123 @@ const ChatsList = ({ onSelectChat, selectedChat, ...props }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const chatListRef = useRef(null);
 
+  // Manejar actualización de estado de chat (locked)
+  useEffect(() => {
+    const handleStatusUpdate = (event) => {
+      const { phone_number, locked } = event.detail;
+      console.log('🔄 Actualizando estado de chat en ChatsList:', { phone_number, locked });
+      
+      setChats(prevChats => {
+        const updatedChats = [...prevChats];
+        const chatIndex = updatedChats.findIndex(chat => chat.phone_number === phone_number);
+        
+        if (chatIndex >= 0) {
+          // Actualizar el estado locked del chat
+          updatedChats[chatIndex] = {
+            ...updatedChats[chatIndex],
+            locked: locked
+          };
+          
+          console.log('✅ Estado de chat actualizado:', updatedChats[chatIndex]);
+          return [...updatedChats]; // Retornar un nuevo array para forzar la actualización
+        }
+        
+        return prevChats;
+      });
+    };
+    
+    // Registrar el manejador de eventos
+    console.log('🔔 Registrando event listener para chatStatusUpdate en ChatsList');
+    document.addEventListener('chatStatusUpdate', handleStatusUpdate);
+    
+    return () => {
+      console.log('🧹 Limpiando event listener de chatStatusUpdate en ChatsList');
+      document.removeEventListener('chatStatusUpdate', handleStatusUpdate);
+    };
+  }, []);
+
   // Manejar nuevos mensajes
   useEffect(() => {
     const handleNewMessage = (event) => {
       const message = event.detail;
       console.log('📩 Nuevo mensaje recibido en ChatsList:', message);
       
+      // Verificar que el mensaje tenga los datos necesarios
+      if (!message.phone_number || !message.data?.content) {
+        console.warn('Mensaje recibido sin datos necesarios:', message);
+        return;
+      }
+      
       setChats(prevChats => {
-        // Crear una copia del array de chats
-        const newChats = [...prevChats];
+        // Crear una copia del array de chats para no mutar el estado directamente
+        const updatedChats = [...prevChats];
         
         // Buscar el índice del chat existente
-        const chatIndex = newChats.findIndex(chat => chat.phone_number === message.phone_number);
+        const chatIndex = updatedChats.findIndex(chat => chat.phone_number === message.phone_number);
+        
+        // Crear el objeto de mensaje
+        const newMessage = {
+          content: message.data.content,
+          role: message.data.role || 'assistant',
+          timestamp: message.timestamp || new Date().toISOString()
+        };
         
         if (chatIndex >= 0) {
           // Si el chat existe, actualizarlo
-          const existingChat = newChats[chatIndex];
-          const updatedMessages = Array.isArray(existingChat.messages) 
-            ? [...existingChat.messages, {
-                content: message.data.content,
-                role: message.data.role,
-                timestamp: message.timestamp || new Date().toISOString()
-              }]
-            : [{
-                content: message.data.content,
-                role: message.data.role,
-                timestamp: message.timestamp || new Date().toISOString()
-              }];
+          const existingChat = updatedChats[chatIndex];
+          
+          // Verificar si el mensaje ya existe para evitar duplicados
+          const messageExists = existingChat.messages?.some(
+            msg => msg.content === newMessage.content && 
+                   msg.timestamp === newMessage.timestamp
+          );
+          
+          if (messageExists) {
+            console.log('Mensaje duplicado, ignorando...');
+            return prevChats;
+          }
           
           // Actualizar el chat existente
-          const updatedChat = {
+          updatedChats[chatIndex] = {
             ...existingChat,
-            lastMessage: message.data.content,
-            lastMessageTime: message.timestamp || new Date().toISOString(),
-            timestamp: message.timestamp || new Date().toISOString(),
-            messages: updatedMessages,
-            unreadCount: existingChat.phone_number === selectedChat?.phone_number 
+            lastMessage: newMessage.content,
+            lastMessageTime: newMessage.timestamp,
+            timestamp: newMessage.timestamp,
+            messages: [...(existingChat.messages || []), newMessage],
+            unreadCount: selectedChat?.phone_number === message.phone_number 
               ? 0 
               : (existingChat.unreadCount || 0) + 1
           };
           
-          // Reemplazar el chat existente con el actualizado
-          newChats[chatIndex] = updatedChat;
-          
           // Mover el chat actualizado al principio del array
-          const [movedChat] = newChats.splice(chatIndex, 1);
-          return [movedChat, ...newChats];
+          const [movedChat] = updatedChats.splice(chatIndex, 1);
+          return [movedChat, ...updatedChats];
         } else {
           // Crear un nuevo chat si no existe
           const newChat = {
             id: `chat_${message.phone_number}`,
             phone_number: message.phone_number,
             name: `+${message.phone_number}`,
-            lastMessage: message.data.content,
-            lastMessageTime: message.timestamp || new Date().toISOString(),
-            timestamp: message.timestamp || new Date().toISOString(),
-            messages: [{
-              content: message.data.content,
-              role: message.data.role,
-              timestamp: message.timestamp || new Date().toISOString()
-            }],
+            lastMessage: newMessage.content,
+            lastMessageTime: newMessage.timestamp,
+            timestamp: newMessage.timestamp,
+            messages: [newMessage],
             unreadCount: 1
           };
           
-          return [newChat, ...newChats];
+          return [newChat, ...updatedChats];
         }
       });
     };
 
-    // Agregar event listener
-    const currentRef = chatListRef.current;
-    if (currentRef) {
-      currentRef.addEventListener('newMessage', handleNewMessage);
-    }
-
-    // Limpiar
+    // Agregar event listener al documento para capturar eventos de mensajes
+    console.log('🔔 Registrando event listener para newMessage en ChatsList');
+    document.addEventListener('newMessage', handleNewMessage);
+    
+    // Limpiar el event listener al desmontar
     return () => {
-      if (currentRef) {
-        currentRef.removeEventListener('newMessage', handleNewMessage);
-      }
+      console.log('🧹 Limpiando event listener de newMessage en ChatsList');
+      document.removeEventListener('newMessage', handleNewMessage);
     };
   }, []);
 
@@ -271,21 +309,21 @@ const ChatsList = ({ onSelectChat, selectedChat, ...props }) => {
                     {chat.locked ? (
                       <PersonOutlineIcon 
                         fontSize="medium"
-                        color="primary"
                         sx={{ 
                           width: 20, 
                           height: 20, 
-                          mb: 0.5 
+                          mb: 0.5,
+                          color: 'error.main' // Rojo para humano
                         }}
                       />
                     ) : (
                       <SmartToyIcon 
                         fontSize="medium"
-                        color="primary"
                         sx={{ 
                           width: 20, 
                           height: 20, 
-                          mb: 0.5 
+                          mb: 0.5,
+                          color: 'success.main' // Verde para bot
                         }}
                       />
                     )}

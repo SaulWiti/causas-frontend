@@ -42,41 +42,81 @@ const ChatsPage = () => {
       ws.current.onmessage = (event) => {
         try {
           const message = JSON.parse(event.data);
-          console.log('📨 Mensaje WebSocket recibido:', message);
+          console.log('📨 Mensaje WebSocket recibido en ChatsPage:', message);
           
-          if (message.type === 'new_message') {
-            console.log('📩 Procesando nuevo mensaje:', {
-              phone: message.phone_number,
-              content: message.data?.content?.substring(0, 50) + '...',
-              role: message.data?.role
+          if (message.type === 'new_message' && message.phone_number) {
+            // Asegurarse de que el mensaje tenga la estructura correcta
+            const processedMessage = {
+              ...message,
+              data: {
+                content: message.data?.content || '',
+                role: message.data?.role || 'assistant',
+                ...message.data
+              },
+              timestamp: message.timestamp || new Date().toISOString()
+            };
+            
+            console.log('📩 Procesando nuevo mensaje para:', {
+              phone: processedMessage.phone_number,
+              content: processedMessage.data?.content?.substring(0, 50) + '...',
+              role: processedMessage.data?.role
             });
             
-              // Crear un solo evento global que se propagará a través del DOM
+            // Crear un evento global para notificar a los componentes
             const messageEvent = new CustomEvent('newMessage', { 
-              detail: message,
+              detail: processedMessage,
               bubbles: true,
               cancelable: true
             });
             
-            // Disparar el evento una sola vez en el documento
+            // Disparar el evento en el documento
             console.log('🚀 Disparando evento newMessage');
             document.dispatchEvent(messageEvent);
             
-            // Actualizar el estado local si el chat está seleccionado
-            if (selectedChat?.phone_number === message.phone_number) {
+            // Actualizar el chat seleccionado si es necesario
+            if (selectedChat?.phone_number === processedMessage.phone_number) {
               console.log('🔄 Actualizando chat seleccionado con nuevo mensaje');
               setSelectedChat(prev => ({
                 ...prev,
-                lastMessage: message.data?.content || '',
-                timestamp: message.timestamp || new Date().toISOString(),
+                lastMessage: processedMessage.data?.content || '',
+                timestamp: processedMessage.timestamp,
                 messages: [
                   ...(prev.messages || []),
                   {
-                    content: message.data?.content || '',
-                    role: message.data?.role || 'assistant',
-                    timestamp: message.timestamp || new Date().toISOString()
+                    content: processedMessage.data?.content || '',
+                    role: processedMessage.data?.role || 'assistant',
+                    timestamp: processedMessage.timestamp
                   }
                 ]
+              }));
+            }
+          } 
+          // Manejar actualización de estado (locked)
+          else if (message.type === 'status_update' && message.phone_number && message.locked !== undefined) {
+            console.log('🔄 Recibida actualización de estado:', {
+              phone: message.phone_number,
+              locked: message.locked
+            });
+
+            // Disparar un evento global para la actualización de estado
+            const statusEvent = new CustomEvent('chatStatusUpdate', {
+              detail: {
+                phone_number: message.phone_number,
+                locked: message.locked
+              },
+              bubbles: true,
+              cancelable: true
+            });
+            
+            console.log('🚀 Disparando evento chatStatusUpdate');
+            document.dispatchEvent(statusEvent);
+
+            // Actualizar el chat seleccionado si es necesario
+            if (selectedChat?.phone_number === message.phone_number) {
+              console.log('🔄 Actualizando estado del chat seleccionado');
+              setSelectedChat(prev => ({
+                ...prev,
+                locked: message.locked
               }));
             }
           }
@@ -135,8 +175,13 @@ const ChatsPage = () => {
   }, [connectWebSocket]);
 
   const handleSelectChat = (chat) => {
-    console.log('Chat seleccionado:', chat);
+    console.log('Chat seleccionado:', chat.phone_number);
     setSelectedChat(chat);
+  };
+
+  const handleCloseChat = () => {
+    console.log('Cerrando chat actual');
+    setSelectedChat(null);
   };
 
   // Efecto para depurar cambios en el estado de conexión
@@ -187,6 +232,7 @@ const ChatsPage = () => {
           <ChatWindow 
             selectedChat={selectedChat} 
             isConnected={isConnected} 
+            onCloseChat={handleCloseChat}
             data-testid="chat-window"
             sx={{ 
               height: '100%',

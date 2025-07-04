@@ -12,6 +12,7 @@ import SendIcon from '@mui/icons-material/Send';
 import SmartToyIcon from '@mui/icons-material/SmartToy';
 import PersonIcon from '@mui/icons-material/Person';
 import AccountCircleIcon from '@mui/icons-material/AccountCircle';
+import CloseIcon from '@mui/icons-material/Close';
 import axios from 'axios';
 
 const ChatWindow = ({ selectedChat, isConnected, ...props }) => {
@@ -19,6 +20,7 @@ const ChatWindow = ({ selectedChat, isConnected, ...props }) => {
   const [messages, setMessages] = useState([]);
   const [newMessage, setNewMessage] = useState('');
   const [loading, setLoading] = useState(false);
+  const [chatLocked, setChatLocked] = useState(selectedChat?.locked ?? false);
   const messagesEndRef = useRef(null);
   const chatWindowRef = useRef(null);
 
@@ -61,17 +63,34 @@ const ChatWindow = ({ selectedChat, isConnected, ...props }) => {
   useEffect(() => {
     const handleNewMessage = (event) => {
       const message = event.detail;
+      console.log('📩 ChatWindow recibió mensaje:', {
+        phone: message.phone_number,
+        content: message.data?.content?.substring(0, 50) + '...',
+        selectedChat: selectedChat?.phone_number
+      });
       
-      // Solo procesar si es para el chat actual y es un nuevo mensaje
-      if (selectedChat?.phone_number === message.phone_number && message.type === 'new_message') {
+      // Solo procesar si es para el chat actual
+      if (selectedChat?.phone_number === message.phone_number) {
         const messageData = message.data || {};
+        const messageId = message.message_id || `msg_${Date.now()}`;
         
         setMessages(prevMessages => {
-          // Verificar si ya existe un mensaje con el mismo ID
-          const messageId = message.message_id || `msg_${Date.now()}`;
-          if (prevMessages.some(msg => msg.id === messageId)) {
+          // Verificar si ya existe un mensaje con el mismo contenido y timestamp
+          const messageExists = prevMessages.some(msg => 
+            msg.content === messageData.content && 
+            msg.timestamp === message.timestamp
+          );
+          
+          if (messageExists) {
+            console.log('Mensaje duplicado en ChatWindow, ignorando...');
             return prevMessages;
           }
+          
+          console.log('➕ Agregando nuevo mensaje al chat:', {
+            content: messageData.content?.substring(0, 50) + '...',
+            role: messageData.role,
+            timestamp: message.timestamp
+          });
           
           return [
             ...prevMessages,
@@ -87,14 +106,51 @@ const ChatWindow = ({ selectedChat, isConnected, ...props }) => {
       }
     };
 
-    // Agregar event listener al documento
+    console.log('🔔 ChatWindow registrando event listener para newMessage');
     document.addEventListener('newMessage', handleNewMessage);
-    return () => document.removeEventListener('newMessage', handleNewMessage);
+    
+    return () => {
+      console.log('🧹 ChatWindow limpiando event listener de newMessage');
+      document.removeEventListener('newMessage', handleNewMessage);
+    };
   }, [selectedChat?.phone_number]);
+
+  useEffect(() => {
+    const handleStatusUpdate = (event) => {
+      const { phone_number, locked } = event.detail;
+      
+      // Solo actualizar si el chat actual coincide con el evento
+      if (selectedChat?.phone_number === phone_number) {
+        console.log('🔄 ChatWindow: Actualizando estado del chat:', { phone_number, locked });
+        
+        // Actualizar el estado local
+        setChatLocked(locked);
+        
+        // Notificar al componente padre si es necesario
+        if (props.onChatUpdate) {
+          props.onChatUpdate({
+            ...selectedChat,
+            locked: locked
+          });
+        }
+      }
+    };
+    
+    console.log('🔔 ChatWindow: Registrando event listener para chatStatusUpdate');
+    document.addEventListener('chatStatusUpdate', handleStatusUpdate);
+    
+    return () => {
+      console.log('🧹 ChatWindow: Limpiando event listener de chatStatusUpdate');
+      document.removeEventListener('chatStatusUpdate', handleStatusUpdate);
+    };
+  }, [selectedChat, props.onChatUpdate]);
 
   // Cargar mensajes cuando se selecciona un chat
   useEffect(() => {
     if (!selectedChat) return;
+    
+    // Actualizar el estado locked cuando cambia el chat seleccionado
+    setChatLocked(selectedChat.locked ?? false);
     
     // Usar requestAnimationFrame para asegurar que el DOM está listo
     const rafId = requestAnimationFrame(() => {
@@ -214,8 +270,10 @@ const ChatWindow = ({ selectedChat, isConnected, ...props }) => {
   
   const getMessageIcon = (role) => {
     return role === 'assistant' ? 
-      <SmartToyIcon sx={{ fontSize: 16 }} /> : 
-      <PersonIcon sx={{ fontSize: 16 }} />;
+      <SmartToyIcon sx={{ fontSize: 20 , color: 'success.main', opacity: 0.7}} />:
+      role === "human" ?
+      <PersonIcon sx={{ fontSize: 20 , color: 'error.main', opacity: 0.6}} />:
+      <PersonIcon sx={{ fontSize: 18.5, opacity: 0.7}} />; // como no son los mismos colores la apriencia de tamanho no es la misma
   };
 
   return (
@@ -243,8 +301,10 @@ const ChatWindow = ({ selectedChat, isConnected, ...props }) => {
             borderBottom: `1px solid ${theme.palette.divider}`,
             display: 'flex',
             alignItems: 'center',
+            justifyContent: 'space-between',
             backgroundColor: theme.palette.background.paper,
-            flexShrink: 1
+            flexShrink: 1,
+            position: 'relative'
           }}>
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
               <AccountCircleIcon color="primary" />
@@ -252,6 +312,22 @@ const ChatWindow = ({ selectedChat, isConnected, ...props }) => {
                 +{selectedChat.phone_number}
               </Typography>
             </Box>
+            
+            {/* Botón de cierre */}
+            <IconButton 
+              aria-label="Cerrar chat"
+              onClick={props.onCloseChat}
+              size="small"
+              sx={{
+                color: theme.palette.grey[500],
+                '&:hover': {
+                  color: theme.palette.grey[800],
+                  backgroundColor: 'rgba(0, 0, 0, 0.04)'
+                }
+              }}
+            >
+              <CloseIcon />
+            </IconButton>
           </Box>
           
           {/* Área de mensajes con scroll */}
@@ -341,14 +417,14 @@ const ChatWindow = ({ selectedChat, isConnected, ...props }) => {
                               display: 'inline-flex',
                               alignItems: 'center',
                               justifyContent: 'center',
-                              width: 23,
-                              height: 23,
+                              width: 28,
+                              height: 28,
                               borderRadius: '50%',
-                              bgcolor: isFromRight ? 'primary.main' : 'grey.200',
+                              bgcolor: 'transparent',
                               color: isFromRight ? '#fff' : 'text.primary',
                               position: 'absolute',
                               top: 0,
-                              [isFromRight ? 'right' : 'left']: 0,
+                              [isFromRight ? 'right' : 'left']: -6,
                               zIndex: 1
                             }}
                           >
@@ -414,7 +490,7 @@ const ChatWindow = ({ selectedChat, isConnected, ...props }) => {
           </Box>
           
           {/* Área de entrada de mensajes */}
-          <Box sx={{
+          <Box sx={{ 
             p: 2.5, 
             pt: 1,  // Reducir el padding superior
             borderTop: `1px solid ${theme.palette.divider}`,
@@ -429,9 +505,108 @@ const ChatWindow = ({ selectedChat, isConnected, ...props }) => {
               sx={{ 
                 display: 'flex', 
                 gap: 1, 
-                alignItems: 'center' 
+                alignItems: 'center',
+                width: '100%'
               }}
             >
+              <Box sx={{ display: 'flex', gap: 1, alignItems: 'center', mr: 1 }}>
+                {chatLocked === true && (
+                  <IconButton 
+                    size="small"
+                    onClick={async (e) => {
+                      e.preventDefault();
+                      try {
+                        const response = await axios.put(
+                          `${import.meta.env.VITE_URL_BACKEND}/webhook/whatsapp/unlock`,
+                          {
+                            phone_number: selectedChat.phone_number
+                          },
+                          {
+                            headers: {
+                              'api-key-auth': import.meta.env.VITE_API_KEY_AUTH,
+                              'Content-Type': 'application/json'
+                            }
+                          }
+                        );
+                        
+                        if (response.status === 200) {
+                          console.log('✅ Chat desbloqueado exitosamente');
+                          // Actualizar el estado del chat
+                          if (props.onChatUpdate) {
+                            props.onChatUpdate({
+                              ...selectedChat,
+                              locked: false
+                            });
+                          }
+                        }
+                      } catch (error) {
+                        console.error('Error al desbloquear el chat:', error);
+                        alert('No se pudo desbloquear el chat. Por favor, intente nuevamente.');
+                      }
+                    }}
+                    sx={{ 
+                      color: 'success.main',
+                      '&:hover': {
+                        backgroundColor: 'rgba(46, 125, 50, 0.08)',
+                      },
+                      height: '40px',
+                      width: '40px',
+                    }}
+                    title="Activar bot"
+                  >
+                    <SmartToyIcon />
+                  </IconButton>
+                )}
+                
+                {chatLocked === false && (
+                  <IconButton 
+                    size="small"
+                    onClick={async (e) => {
+                      e.preventDefault();
+                      try {
+                        const response = await axios.put(
+                          `${import.meta.env.VITE_URL_BACKEND}/webhook/whatsapp/lock`,
+                          {
+                            phone_number: selectedChat.phone_number
+                          },
+                          {
+                            headers: {
+                              'api-key-auth': import.meta.env.VITE_API_KEY_AUTH,
+                              'Content-Type': 'application/json'
+                            }
+                          }
+                        );
+                        
+                        if (response.status === 200) {
+                          console.log('✅ Chat bloqueado exitosamente');
+                          // Actualizar el estado del chat
+                          if (props.onChatUpdate) {
+                            props.onChatUpdate({
+                              ...selectedChat,
+                              locked: true
+                            });
+                          }
+                        }
+                      } catch (error) {
+                        console.error('Error al bloquear el chat:', error);
+                        alert('No se pudo bloquear el chat. Por favor, intente nuevamente.');
+                      }
+                    }}
+                    sx={{ 
+                      color: 'error.main',
+                      '&:hover': {
+                        backgroundColor: 'rgba(211, 47, 47, 0.08)',
+                      },
+                      height: '40px',
+                      width: '40px',
+                    }}
+                    title="Tomar el control del chat"
+                  >
+                    <PersonIcon />
+                  </IconButton>
+                )}
+              </Box>
+              
               <TextField
                 fullWidth
                 variant="outlined"
@@ -439,6 +614,17 @@ const ChatWindow = ({ selectedChat, isConnected, ...props }) => {
                 value={newMessage}
                 onChange={(e) => setNewMessage(e.target.value)}
                 size="small"
+                autoComplete="off"
+                onKeyPress={(e) => {
+                  if (e.key === 'Enter' && !e.shiftKey) {
+                    e.preventDefault();
+                    handleSendMessage(e);
+                  }
+                }}
+                inputProps={{
+                  autoComplete: 'off',
+                  'aria-autocomplete': 'none',
+                }}
                 sx={{
                   '& .MuiOutlinedInput-root': {
                     borderRadius: 4,
@@ -447,6 +633,7 @@ const ChatWindow = ({ selectedChat, isConnected, ...props }) => {
                 }}
                 disabled={!selectedChat || loading}
               />
+              
               <Box sx={{ display: 'flex', gap: 1, alignItems: 'center' }}>
                 <IconButton 
                   type="submit" 
@@ -455,9 +642,8 @@ const ChatWindow = ({ selectedChat, isConnected, ...props }) => {
                   sx={{ 
                     backgroundColor: theme.palette.primary.main,
                     color: '#fff',
-                    height: '40px',
-                    width: '40px',
-                    mb: '2px',
+                    height: '38px',
+                    width: '38px',
                     '&:hover': {
                       backgroundColor: theme.palette.primary.dark,
                     },
@@ -468,45 +654,6 @@ const ChatWindow = ({ selectedChat, isConnected, ...props }) => {
                 >
                   <SendIcon />
                 </IconButton>
-                {selectedChat?.locked && (
-                  <IconButton 
-                    size="small"
-                    onClick={async () => {
-                      try {
-                        const response = await axios.put(
-                          `${import.meta.env.VITE_URL_BACKEND}/chats/${selectedChat.phone_number}/toggle-bot`,
-                          {},
-                          {
-                            headers: {
-                              'x-api-key': import.meta.env.VITE_API_KEY_AUTH,
-                              'Content-Type': 'application/json'
-                            }
-                          }
-                        );
-                        if (response.data.success) {
-                          props.onChatUpdate?.({
-                            ...selectedChat,
-                            locked: false
-                          });
-                        }
-                      } catch (error) {
-                        console.error('Error al activar el bot:', error);
-                      }
-                    }}
-                    sx={{ 
-                      color: theme.palette.primary.main,
-                      '&:hover': {
-                        backgroundColor: 'rgba(25, 118, 210, 0.04)',
-                      },
-                      mb: '2px',
-                      height: '40px',
-                      width: '40px',
-                    }}
-                    title="Activar bot"
-                  >
-                    <SmartToyIcon />
-                  </IconButton>
-                )}
               </Box>
             </Box>
           </Box>
