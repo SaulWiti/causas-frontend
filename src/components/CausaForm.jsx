@@ -246,14 +246,14 @@ function CausaForm() {
     
     // Si está en modo vista, no hacer nada al enviar el formulario
     if (isViewMode) {
-      navigate('/causas');
+      navigate('/');
       return;
     }
     
     setLoading(true);
     
     const method = id_causa ? 'put' : 'post';
-    const url = id_causa ? `${API_URL}/causas/${id_causa}` : `${API_URL}/causas/`;
+    const url = id_causa ? `${API_URL}/causas/${id_causa}/` : `${API_URL}/causas/`;
     
     // Crear una copia del objeto causa para evitar modificar el estado directamente
     const causaToSend = JSON.parse(JSON.stringify(causa));
@@ -278,12 +278,43 @@ function CausaForm() {
       method,
       url,
       data: causaToSend,
-      headers: { 'api-key-auth': import.meta.env.VITE_API_KEY_AUTH }
+      headers: { 
+        'api-key-auth': import.meta.env.VITE_API_KEY_AUTH,
+        'Content-Type': 'application/json'
+      }
     })
-    .then(() => navigate('/causas'))
+    .then(() => navigate('/'))
     .catch(err => {
-      setError(err.response?.data?.detail || 'Error al guardar la causa');
-      console.error(err);
+      console.error('Error al guardar la causa:', err);
+      
+      // Manejar error de validación 422
+      if (err.response?.status === 422 && err.response?.data?.detail) {
+        // Si el detalle es un array, extraer los mensajes
+        if (Array.isArray(err.response.data.detail)) {
+          const errorMessages = err.response.data.detail.map(error => 
+            `• ${error.loc?.join('.') || 'Error'}: ${error.msg || 'Error de validación'}`
+          ).join('\n');
+          setError(`No se pudo guardar la causa. Faltan campos por completar.`);
+        } 
+        // Si es un string, mostrarlo directamente
+        else if (typeof err.response.data.detail === 'string') {
+          setError(err.response.data.detail);
+        }
+        // Si es un objeto, intentar mostrarlo de manera legible
+        else if (typeof err.response.data.detail === 'object') {
+          setError(JSON.stringify(err.response.data.detail, null, 2));
+        }
+      } 
+      // Manejar otros tipos de errores
+      else if (err.response?.data?.detail) {
+        setError(err.response.data.detail);
+      } 
+      else if (err.response?.data?.message) {
+        setError(err.response.data.message);
+      }
+      else {
+        setError('Error al guardar la causa. Por favor, intente nuevamente.');
+      }
     })
     .finally(() => setLoading(false));
   };
@@ -422,7 +453,21 @@ function CausaForm() {
               </Button>
             )}
           </Box>
-          {error && <Alert severity="error" sx={{ mb: 2, flexShrink: 0 }}>{error}</Alert>}
+          {error && (
+            <Alert 
+              severity="error" 
+              sx={{ 
+                mb: 2, 
+                flexShrink: 0,
+                whiteSpace: 'pre-line',
+                '& .MuiAlert-message': {
+                  width: '100%'
+                }
+              }}
+            >
+              {error}
+            </Alert>
+          )}
           
           {/* Pestañas */}
           <Box sx={{ borderBottom: 1, borderColor: 'divider', mb: 2 }}>

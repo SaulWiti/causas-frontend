@@ -84,10 +84,12 @@ const ChatsList = ({ onSelectChat, selectedChat, ...props }) => {
         const chatIndex = updatedChats.findIndex(chat => chat.phone_number === message.phone_number);
         
         // Crear el objeto de mensaje
+        const now = new Date().toISOString();
         const newMessage = {
           content: message.data.content,
           role: message.data.role || 'assistant',
-          timestamp: message.timestamp || new Date().toISOString()
+          timestamp: message.timestamp || now,
+          date: message.timestamp || now // Asegurar que el campo date esté presente
         };
         
         if (chatIndex >= 0) {
@@ -175,6 +177,21 @@ const ChatsList = ({ onSelectChat, selectedChat, ...props }) => {
   const formatDateTime = (dateString) => {
     if (!dateString) return '';
     const date = new Date(dateString);
+    const today = new Date();
+    
+    // Verificar si es hoy
+    if (date.getDate() === today.getDate() && 
+        date.getMonth() === today.getMonth() && 
+        date.getFullYear() === today.getFullYear()) {
+      // Mostrar solo la hora
+      return date.toLocaleTimeString('es-CL', {
+        hour: '2-digit',
+        minute: '2-digit',
+        hour12: false
+      });
+    }
+    
+    // Mostrar fecha completa si no es hoy
     return date.toLocaleString('es-CL', {
       day: '2-digit',
       month: '2-digit',
@@ -281,7 +298,8 @@ const ChatsList = ({ onSelectChat, selectedChat, ...props }) => {
           }}>
             {filteredChats.map((chat) => {
             const lastMessage = chat.messages?.length > 0 ? chat.messages[chat.messages.length - 1] : null;
-            const messageDate = lastMessage?.date || chat.date;
+            // Usar la fecha del último mensaje o la fecha del chat
+            const messageDate = lastMessage?.date || chat.date || chat.timestamp;
             const isSelected = selectedChat?.phone_number === chat.phone_number;
             
             return (
