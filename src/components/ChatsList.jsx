@@ -17,8 +17,9 @@ import {
 } from '@mui/material';
 import PersonIcon from '@mui/icons-material/Person';
 import SmartToyIcon from '@mui/icons-material/SmartToy';
-import PersonOutlineIcon from '@mui/icons-material/PersonOutline';
+import GroupsIcon from '@mui/icons-material/Groups';
 import SearchIcon from '@mui/icons-material/Search';
+import { ToggleButton, ToggleButtonGroup } from '@mui/material';
 import axios from 'axios';
 
 const ChatsList = ({ onSelectChat, selectedChat, ...props }) => {
@@ -27,6 +28,7 @@ const ChatsList = ({ onSelectChat, selectedChat, ...props }) => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [searchTerm, setSearchTerm] = useState('');
+  const [filter, setFilter] = useState('all'); // 'all', 'bot', 'human'
   const chatListRef = useRef(null);
 
   // Manejar actualización de estado de chat (locked)
@@ -74,6 +76,37 @@ const ChatsList = ({ onSelectChat, selectedChat, ...props }) => {
       if (!message.phone_number || !message.data?.content) {
         console.warn('Mensaje recibido sin datos necesarios:', message);
         return;
+      }
+      
+      // Verificar si es un mensaje de usuario en un chat bloqueado
+      if (message.data?.role === 'user') {
+        setChats(prevChats => {
+          const chatIndex = prevChats.findIndex(chat => chat.phone_number === message.phone_number);
+          
+          if (chatIndex >= 0) {
+            const chat = prevChats[chatIndex];
+            
+            // Si el chat está bloqueado
+            if (chat.locked) {
+              const isChatOpen = selectedChat?.phone_number === message.phone_number;
+              
+              // Si el chat está abierto, marcar como visto
+              if (isChatOpen) {
+                markMessagesAsViewed(chat.phone_number).catch(console.error);
+              } 
+              // Si el chat no está abierto, incrementar el contador
+              else if (chat.self_count_not_viewed !== undefined) {
+                const updatedChats = [...prevChats];
+                updatedChats[chatIndex] = {
+                  ...chat,
+                  self_count_not_viewed: (chat.self_count_not_viewed || 0) + 1
+                };
+                return updatedChats;
+              }
+            }
+          }
+          return prevChats;
+        });
       }
       
       setChats(prevChats => {
@@ -201,9 +234,68 @@ const ChatsList = ({ onSelectChat, selectedChat, ...props }) => {
     });
   };
 
-  const filteredChats = chats.filter(chat => 
-    chat.phone_number.includes(searchTerm.replace(/\D/g, ''))
-  );
+  // Función para marcar los mensajes como vistos
+  const markMessagesAsViewed = async (phoneNumber) => {
+    try {
+      // Actualizar el estado local primero para una mejor experiencia de usuario
+      setChats(prevChats => 
+        prevChats.map(chat => 
+          chat.phone_number === phoneNumber 
+            ? { ...chat, self_count_not_viewed: 0 } 
+            : chat
+        )
+      );
+
+      // Hacer la llamada al backend
+      await axios.put(
+        `${import.meta.env.VITE_URL_BACKEND}/bot-whatsapp/update-chat/${phoneNumber}`,
+        {},
+        { 
+          headers: { 
+            'api-key-auth': import.meta.env.VITE_API_KEY_AUTH 
+          } 
+        }
+      );
+      
+      console.log(`Mensajes marcados como vistos para ${phoneNumber}`);
+    } catch (error) {
+      console.error('Error al marcar mensajes como vistos:', error);
+      // Revertir el cambio en caso de error
+      setChats(prevChats => 
+        prevChats.map(chat => 
+          chat.phone_number === phoneNumber && chat.self_count_not_viewed === 0
+            ? { ...chat, self_count_not_viewed: chat.self_count_not_viewed }
+            : chat
+        )
+      );
+    }
+  };
+
+  // Manejador para seleccionar un chat
+  const handleSelectChat = async (chat) => {
+    // Si hay mensajes no vistos, marcarlos como vistos
+    if (chat.self_count_not_viewed > 0) {
+      await markMessagesAsViewed(chat.phone_number);
+    }
+    // Llamar al manejador original para seleccionar el chat
+    onSelectChat(chat);
+  };
+
+  // Filtrar chats según el término de búsqueda y el filtro seleccionado
+  const filteredChats = chats.filter(chat => {
+    const matchesSearch = chat.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
+                         chat.phone_number.includes(searchTerm.replace(/\D/g, ''));
+    
+    if (filter === 'bot') return matchesSearch && chat.locked === false;
+    if (filter === 'human') return matchesSearch && chat.locked === true;
+    return matchesSearch; // 'all' o cualquier otro valor
+  });
+
+  const handleFilterChange = (event, newFilter) => {
+    if (newFilter !== null) {
+      setFilter(newFilter);
+    }
+  };
 
   return (
     <Box 
@@ -227,7 +319,7 @@ const ChatsList = ({ onSelectChat, selectedChat, ...props }) => {
           display: 'flex', 
           justifyContent: 'space-between', 
           alignItems: 'center',
-          mb: 2 // Espacio debajo del encabezado
+          mb: 1 // Reducido para dar espacio a los botones de filtro
         }}>
           <Typography variant="h6" sx={{ fontWeight: 500 }}>
             Chats
@@ -266,22 +358,100 @@ const ChatsList = ({ onSelectChat, selectedChat, ...props }) => {
         />
       </Box>
       
-      {loading ? (
-        <Box display="flex" justifyContent="center" alignItems="center" flex={1}>
-          <CircularProgress />
+      {/* Contenedor principal */}
+      <Box sx={{ flex: 1, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
+        {/* Filtros - Siempre visibles */}
+        <Box sx={{ 
+          display: 'flex', 
+          gap: 1, 
+          mb: 2,
+          px: 1,
+          pt: 1
+        }}>
+          <ToggleButtonGroup
+            value={filter}
+            exclusive
+            onChange={handleFilterChange}
+            aria-label="filtro de chats"
+            fullWidth
+            size="small"
+          >
+            <ToggleButton 
+              value="all" 
+              aria-label="todos"
+              sx={{
+                '&.Mui-selected': {
+                  backgroundColor: '#2196f3',
+                  color: 'white',
+                  '&:hover': {
+                    backgroundColor: '#1976d2',
+                  }
+                },
+                flex: 1,
+                textTransform: 'none',
+                gap: 0.5
+              }}
+            >
+              <GroupsIcon fontSize="small" />
+              <span>Todos</span>
+            </ToggleButton>
+            <ToggleButton 
+              value="bot" 
+              aria-label="bot"
+              sx={{
+                '&.Mui-selected': {
+                  backgroundColor: '#4caf50',
+                  color: 'white',
+                  '&:hover': {
+                    backgroundColor: '#388e3c',
+                  }
+                },
+                flex: 1,
+                textTransform: 'none',
+                gap: 0.5
+              }}
+            >
+              <SmartToyIcon fontSize="small" />
+              <span>Bot</span>
+            </ToggleButton>
+            <ToggleButton 
+              value="human" 
+              aria-label="humano"
+              sx={{
+                '&.Mui-selected': {
+                  backgroundColor: '#f44336',
+                  color: 'white',
+                  '&:hover': {
+                    backgroundColor: '#d32f2f',
+                  }
+                },
+                flex: 1,
+                textTransform: 'none',
+                gap: 0.5
+              }}
+            >
+              <PersonIcon fontSize="small" />
+              <span>Humano</span>
+            </ToggleButton>
+          </ToggleButtonGroup>
         </Box>
-      ) : error ? (
-        <Box p={3}>
-          <Typography color="error">{error}</Typography>
-        </Box>
-      ) : filteredChats.length === 0 ? (
-        <Box p={3} textAlign="center">
-          <Typography variant="body1" color="textSecondary">
-            {searchTerm ? 'No se encontraron chats' : 'No hay chats disponibles'}
-          </Typography>
-        </Box>
-      ) : (
-        <Box sx={{ flex: 1, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
+
+        {/* Contenido condicional */}
+        {loading ? (
+          <Box display="flex" justifyContent="center" alignItems="center" flex={1}>
+            <CircularProgress />
+          </Box>
+        ) : error ? (
+          <Box p={3}>
+            <Typography color="error">{error}</Typography>
+          </Box>
+        ) : filteredChats.length === 0 ? (
+          <Box p={3} textAlign="center">
+            <Typography variant="body1" color="textSecondary">
+              {searchTerm ? 'No se encontraron chats' : 'No hay chats disponibles'}
+            </Typography>
+          </Box>
+        ) : (
           <List sx={{ 
             flex: 1, 
             overflowY: 'auto',
@@ -297,68 +467,86 @@ const ChatsList = ({ onSelectChat, selectedChat, ...props }) => {
             }
           }}>
             {filteredChats.map((chat) => {
-            const lastMessage = chat.messages?.length > 0 ? chat.messages[chat.messages.length - 1] : null;
-            // Usar la fecha del último mensaje o la fecha del chat
-            const messageDate = lastMessage?.date || chat.date || chat.timestamp;
-            const isSelected = selectedChat?.phone_number === chat.phone_number;
-            
-            return (
-              <ListItem 
-                button 
-                key={chat.phone_number}
-                onClick={() => onSelectChat(chat)}
-                sx={{
-                  borderRadius: 1,
-                  mb: 1,
-                  display: 'flex',
-                  justifyContent: 'space-between',
-                  alignItems: 'flex-start',
-                  py: 1.5,
-                  pl: 1,
-                  backgroundColor: isSelected ? theme.palette.action.selected : 'transparent',
-                  '&:hover': {
-                    backgroundColor: isSelected 
-                      ? theme.palette.action.selected 
-                      : theme.palette.action.hover
+              const lastMessage = chat.messages?.length > 0 ? chat.messages[chat.messages.length - 1] : null;
+              // Usar la fecha del último mensaje o la fecha del chat
+              const messageDate = lastMessage?.date || chat.date || chat.timestamp;
+              const isSelected = selectedChat?.phone_number === chat.phone_number;
+              
+              return (
+                <ListItem 
+                  button 
+                  key={chat.phone_number}
+                  onClick={() => handleSelectChat(chat)}
+                  sx={{
+                    borderRadius: 1,
+                    mb: 1,
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                    alignItems: 'flex-start',
+                    py: 1.5,
+                    pl: 1,
+                    backgroundColor: isSelected ? theme.palette.action.selected : 'transparent',
+                    '&:hover': {
+                      backgroundColor: isSelected 
+                        ? theme.palette.action.selected 
+                        : theme.palette.action.hover
+                    }
+                  }}
+                  secondaryAction={
+                    <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end' }}>
+                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 0.5 }}>
+                        {chat.locked && chat.self_count_not_viewed > 0 && !isSelected && (
+                          <Box
+                            sx={{
+                              backgroundColor: 'primary.main',
+                              color: 'white',
+                              borderRadius: '50%',
+                              width: 20,
+                              height: 20,
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              fontSize: '0.7rem',
+                              fontWeight: 'bold'
+                            }}
+                          >
+                            {chat.self_count_not_viewed > 9 ? '9+' : chat.self_count_not_viewed}
+                          </Box>
+                        )}
+                        {chat.locked ? (
+                          <PersonIcon 
+                            fontSize="medium"
+                            sx={{ 
+                              width: 20, 
+                              height: 20, 
+                              color: 'error.main' // Rojo para humano
+                            }}
+                          />
+                        ) : (
+                          <SmartToyIcon 
+                            fontSize="medium"
+                            sx={{ 
+                              width: 20, 
+                              height: 20, 
+                              color: 'success.main' // Verde para bot
+                            }}
+                          />
+                        )}
+                      </Box>
+                      <Typography 
+                        variant="caption" 
+                        color="text.secondary"
+                        sx={{ 
+                          whiteSpace: 'nowrap',
+                          alignSelf: 'flex-end',
+                          lineHeight: 1.3
+                        }}
+                      >
+                        {messageDate ? formatDateTime(messageDate) : ''}
+                      </Typography>
+                    </Box>
                   }
-                }}
-                secondaryAction={
-                  <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end' }}>
-                    {chat.locked ? (
-                      <PersonOutlineIcon 
-                        fontSize="medium"
-                        sx={{ 
-                          width: 20, 
-                          height: 20, 
-                          mb: 0.5,
-                          color: 'error.main' // Rojo para humano
-                        }}
-                      />
-                    ) : (
-                      <SmartToyIcon 
-                        fontSize="medium"
-                        sx={{ 
-                          width: 20, 
-                          height: 20, 
-                          mb: 0.5,
-                          color: 'success.main' // Verde para bot
-                        }}
-                      />
-                    )}
-                    <Typography 
-                      variant="caption" 
-                      color="text.secondary"
-                      sx={{ 
-                        whiteSpace: 'nowrap',
-                        alignSelf: 'flex-end',
-                        lineHeight: 1.3
-                      }}
-                    >
-                      {messageDate ? formatDateTime(messageDate) : ''}
-                    </Typography>
-                  </Box>
-                }
-              >
+                >
                 <ListItemAvatar sx={{ minWidth: 48, mr: 2, my: 0, alignSelf: 'flex-start' }}>
                   <Avatar sx={{ 
                     bgcolor: 'primary.main', 
@@ -420,8 +608,8 @@ const ChatsList = ({ onSelectChat, selectedChat, ...props }) => {
             );
             })}
           </List>
-        </Box>
-      )}
+        )}
+      </Box>
     </Box>
   );
 };

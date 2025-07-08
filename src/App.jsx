@@ -90,7 +90,7 @@ function App() {
                   mr: 1,
                 }} />
                 <Typography variant="h6" noWrap component="div" sx={{ fontWeight: 'bold' }}>
-                  Demo Causas
+                  Legal AI 365
                 </Typography>
               </Box>
               <IconButton 
@@ -217,7 +217,7 @@ function App() {
                     textOverflow: 'ellipsis'
                   }}
                 >
-                  Demo Causas
+                  Legal AI 365
                 </Typography>
               </>
             )}
@@ -228,7 +228,12 @@ function App() {
               onClick={() => navigate('/chats')}
               sx={{ 
                 ml: 1,
-                color: 'text.primary',
+                color: '#25D366',
+                backgroundColor: 'transparent',
+                boxShadow: 'none',
+                '&:hover': {
+                  backgroundColor: 'rgba(37, 211, 102, 0.1)',
+                },
                 '& .MuiSvgIcon-root': {
                   fontSize: '1.75rem'
                 }
@@ -241,7 +246,17 @@ function App() {
           </Tooltip>
 
           <Tooltip title="Perfil" arrow>
-            <IconButton color="inherit">
+            <IconButton 
+              sx={{ 
+                ml: 1,
+                color: 'primary.main',
+                backgroundColor: 'transparent',
+                boxShadow: 'none',
+                '&:hover': {
+                  backgroundColor: 'action.hover',
+                }
+              }}
+            >
               <AccountCircleIcon fontSize="large" />
             </IconButton>
           </Tooltip>
