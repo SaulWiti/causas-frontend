@@ -203,7 +203,7 @@ function TareaForm({ id_causa, id_tarea, isViewMode, onSave, onCancel, tareas = 
     setError(null);
 
     try {
-      await axios.delete(`${API_URL}/tareas/${id_tarea}`, {
+      await axios.delete(`${API_URL}/tareas/${id_tarea}/`, {
         headers: {
           'api-key-auth': import.meta.env.VITE_API_KEY_AUTH
         }
