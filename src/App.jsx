@@ -234,13 +234,13 @@ function App() {
                     variant="h6" 
                     noWrap
                     sx={{ 
-                      fontWeight: 'bold',
-                      color: 'black',
+                      fontWeight: 500,
                       display: { xs: 'none', sm: 'block' },
                       maxWidth: '200px',
                       overflow: 'hidden',
                       textOverflow: 'ellipsis',
-                      fontSize: '1.3rem'
+                      fontSize: '1.4rem',
+                      color: '#404040'
                     }}
                   >
                     Grupo Defensa.cl
