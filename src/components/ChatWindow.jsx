@@ -6,7 +6,8 @@ import {
   TextField, 
   IconButton, 
   useTheme,
-  CircularProgress
+  CircularProgress,
+  Link as MuiLink
 } from '@mui/material';
 import SendIcon from '@mui/icons-material/Send';
 import SmartToyIcon from '@mui/icons-material/SmartToy';
@@ -14,6 +15,33 @@ import PersonIcon from '@mui/icons-material/Person';
 import AccountCircleIcon from '@mui/icons-material/AccountCircle';
 import CloseIcon from '@mui/icons-material/Close';
 import axios from 'axios';
+import ReactMarkdown from 'react-markdown';
+import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
+import { oneDark } from 'react-syntax-highlighter/dist/cjs/styles/prism';
+
+// Componente personalizado para los enlaces que se abren en una nueva pestaña
+const CustomLink = ({ node, ...props }) => (
+  <MuiLink {...props} target="_blank" rel="noopener noreferrer" />
+);
+
+// Componente personalizado para el código
+const CodeBlock = ({ node, inline, className, children, ...props }) => {
+  const match = /language-(\w+)/.exec(className || '');
+  return !inline ? (
+    <SyntaxHighlighter
+      style={oneDark}
+      language={match ? match[1] : 'javascript'}
+      PreTag="div"
+      {...props}
+    >
+      {String(children).replace(/\n$/, '')}
+    </SyntaxHighlighter>
+  ) : (
+    <code className={className} {...props}>
+      {children}
+    </code>
+  );
+};
 
 const ChatWindow = ({ selectedChat, isConnected, ...props }) => {
   const theme = useTheme();
@@ -455,9 +483,74 @@ const ChatWindow = ({ selectedChat, isConnected, ...props }) => {
                             }}
                           >
                             {messageText ? (
-                              <Typography variant="body1" sx={{ whiteSpace: 'pre-wrap' }}>
-                                {messageText}
-                              </Typography>
+                              <Box sx={{ 
+                                '& p': { 
+                                  margin: 0,
+                                  marginBottom: '0.5em',
+                                  lineHeight: 1.5 
+                                },
+                                '& h1, & h2, & h3, & h4, & h5, & h6': {
+                                  margin: '0.5em 0',
+                                  lineHeight: 1.3
+                                },
+                                '& ul, & ol': {
+                                  margin: '0.5em 0',
+                                  paddingLeft: '1.5em'
+                                },
+                                '& code': {
+                                  backgroundColor: isFromRight ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.05)',
+                                  padding: '0.2em 0.4em',
+                                  borderRadius: '3px',
+                                  fontFamily: 'monospace',
+                                  fontSize: '0.9em'
+                                },
+                                '& pre': {
+                                  margin: '0.5em 0',
+                                  borderRadius: '4px',
+                                  overflow: 'auto'
+                                },
+                                '& a': {
+                                  color: isFromRight ? '#90caf9' : theme.palette.primary.main,
+                                  textDecoration: 'none',
+                                  '&:hover': {
+                                    textDecoration: 'underline'
+                                  }
+                                },
+                                '& blockquote': {
+                                  borderLeft: `3px solid ${isFromRight ? 'rgba(255, 255, 255, 0.3)' : 'rgba(0, 0, 0, 0.1)'}`,
+                                  margin: '0.5em 0',
+                                  padding: '0 1em',
+                                  color: isFromRight ? 'rgba(255, 255, 255, 0.8)' : 'rgba(0, 0, 0, 0.7)',
+                                  fontStyle: 'italic'
+                                },
+                                '& table': {
+                                  borderCollapse: 'collapse',
+                                  width: '100%',
+                                  margin: '0.5em 0',
+                                  '& th, & td': {
+                                    border: `1px solid ${isFromRight ? 'rgba(255, 255, 255, 0.2)' : 'rgba(0, 0, 0, 0.1)'}`,
+                                    padding: '6px 12px',
+                                    textAlign: 'left'
+                                  },
+                                  '& th': {
+                                    backgroundColor: isFromRight ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.05)'
+                                  }
+                                },
+                                '& img': {
+                                  maxWidth: '100%',
+                                  borderRadius: '4px',
+                                  margin: '0.5em 0'
+                                }
+                              }}>
+                                <ReactMarkdown
+                                  components={{
+                                    a: CustomLink,
+                                    code: CodeBlock
+                                  }}
+                                >
+                                  {messageText}
+                                </ReactMarkdown>
+                              </Box>
                             ) : (
                               <Typography variant="body2" color="text.secondary" fontStyle="italic">
                                 (Mensaje sin texto)
