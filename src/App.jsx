@@ -23,7 +23,9 @@ import ChevronLeftIcon from '@mui/icons-material/ChevronLeft';
 import HomeIcon from '@mui/icons-material/Home';
 import AddIcon from '@mui/icons-material/Add';
 import WhatsAppIcon from '@mui/icons-material/WhatsApp';
-import BalanceIcon from '@mui/icons-material/Balance';
+// Imágenes del logo
+import logo from '/images/logo.png';
+import logo2 from '/images/logo2.png';
 import AccountCircleIcon from '@mui/icons-material/AccountCircle';
 import CausasList from './components/CausasList';
 import CausaForm from './components/CausaForm';
@@ -48,7 +50,7 @@ function App() {
   const menuItems = [
     { text: 'Inicio', icon: <HomeIcon />, path: '/' },
     { text: 'Nueva Causa', icon: <AddIcon />, path: '/nueva' },
-    { text: 'WhatsApp', icon: <WhatsAppIcon />, path: '/chats', badge: notificaciones },
+    { text: 'Agente', icon: <WhatsAppIcon />, path: '/chats', badge: notificaciones },
   ];
 
   const toggleDrawer = (open) => (event) => {
@@ -84,13 +86,18 @@ function App() {
           {drawerOpen ? (
             <>
               <Box sx={{ display: 'flex', alignItems: 'center' }}>
-                <BalanceIcon sx={{ 
-                  color: 'primary.main',
-                  fontSize: 30,
-                  mr: 1,
-                }} />
+                <img 
+                  src={logo} 
+                  alt="Logo" 
+                  style={{
+                    height: '45px',
+                    width: 'auto',
+                    marginRight: '8px',
+                    objectFit: 'contain'
+                  }} 
+                />
                 <Typography variant="h6" noWrap component="div" sx={{ fontWeight: 'bold' }}>
-                  Legal AI 365
+
                 </Typography>
               </Box>
               <IconButton 
@@ -199,31 +206,51 @@ function App() {
           <Box sx={{ display: 'flex', alignItems: 'center', flexGrow: 1, ml: 1 }}>
             {!drawerOpen && (
               <>
-                <BalanceIcon sx={{ 
-                  color: 'primary.main',
-                  fontSize: 30,
-                  mr: 1,
-                  display: { xs: 'none', sm: 'block' }
-                }} />
-                <Typography 
-                  variant="h6" 
-                  noWrap
-                  sx={{ 
-                    fontWeight: 'bold',
-                    color: 'black',
-                    display: { xs: 'none', sm: 'block' },
-                    maxWidth: '200px',
-                    overflow: 'hidden',
-                    textOverflow: 'ellipsis'
-                  }}
-                >
-                  Legal AI 365
-                </Typography>
+                <img 
+                  src={logo} 
+                  alt="Logo" 
+                  style={{
+                    height: '45px',
+                    width: 'auto',
+                    marginRight: '8px',
+                    objectFit: 'contain',
+                    display: 'none',
+                    '@media (min-width: 600px)': {
+                      display: 'block'
+                    }
+                  }} 
+                />
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                  <img 
+                    src={logo2} 
+                    alt="Logo" 
+                    style={{
+                      height: '24px',
+                      width: 'auto',
+                      objectFit: 'contain'
+                    }} 
+                  />
+                  <Typography 
+                    variant="h6" 
+                    noWrap
+                    sx={{ 
+                      fontWeight: 'bold',
+                      color: 'black',
+                      display: { xs: 'none', sm: 'block' },
+                      maxWidth: '200px',
+                      overflow: 'hidden',
+                      textOverflow: 'ellipsis',
+                      fontSize: '1.3rem'
+                    }}
+                  >
+                    Grupo Defensa.cl
+                  </Typography>
+                </Box>
               </>
             )}
           </Box>
 
-          <Tooltip title="WhatsApp" arrow>
+          <Tooltip title="Agente" arrow>
             <IconButton 
               onClick={() => navigate('/chats')}
               sx={{ 
