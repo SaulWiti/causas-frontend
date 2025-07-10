@@ -6,10 +6,49 @@ import ChatWindow from '../components/ChatWindow';
 const ChatsPage = () => {
   const [selectedChat, setSelectedChat] = useState(null);
   const [isConnected, setIsConnected] = useState(false);
+  const [error, setError] = useState(null);
   const ws = useRef(null);
   const reconnectAttempts = useRef(0);
   const maxReconnectAttempts = 5;
   const reconnectTimeout = useRef(null);
+  const pingInterval = useRef(null);
+  const pongTimeout = useRef(null);
+  const lastPongTime = useRef(Date.now());
+  const PING_INTERVAL = 10000; // 10 segundos (menos que el timeout de Azure de 4 minutos)
+  const PONG_TIMEOUT = 5000; // 5 segundos para recibir respuesta
+
+  const startPing = useCallback(() => {
+    // Limpiar intervalos anteriores
+    if (pingInterval.current) clearInterval(pingInterval.current);
+    if (pongTimeout.current) clearTimeout(pongTimeout.current);
+
+    // Configurar el intervalo de ping
+    pingInterval.current = setInterval(() => {
+      if (ws.current?.readyState === WebSocket.OPEN) {
+        // Enviar ping
+        const pingMsg = JSON.stringify({ type: 'ping', timestamp: Date.now() });
+        ws.current.send(pingMsg);
+        console.log('🏓 Ping enviado');
+
+        // Configurar timeout para pong
+        pongTimeout.current = setTimeout(() => {
+          const timeSinceLastPong = Date.now() - lastPongTime.current;
+          if (timeSinceLastPong > PING_INTERVAL + PONG_TIMEOUT) {
+            console.warn('⚠️ No se recibió PONG, reconectando...');
+            ws.current?.close(1001, 'No PONG received');
+          }
+        }, PONG_TIMEOUT);
+      }
+    }, PING_INTERVAL);
+  }, []);
+
+  const handlePong = useCallback(() => {
+    lastPongTime.current = Date.now();
+    if (pongTimeout.current) {
+      clearTimeout(pongTimeout.current);
+      pongTimeout.current = null;
+    }
+  }, []);
 
   const connectWebSocket = useCallback(() => {
     // Limpiar intentos de reconexión si existe uno pendiente
@@ -34,14 +73,22 @@ const ChatsPage = () => {
       ws.current.onopen = () => {
         console.log('✅ Conexión WebSocket establecida');
         setIsConnected(true);
-        setError(null);
+        setError && setError(null);
         reconnectAttempts.current = 0; // Reiniciar contador de reconexiones
+        lastPongTime.current = Date.now();
+        startPing(); // Iniciar el mecanismo de ping/pong
       };
 
       // Configurar el manejador de mensajes
       ws.current.onmessage = (event) => {
         try {
+          // Verificar si es un mensaje de pong
           const message = JSON.parse(event.data);
+          if (message.type === 'pong') {
+            console.log('🏓 Pong recibido');
+            handlePong();
+            return; // No procesar más este mensaje
+          }
           console.log('📨 Mensaje WebSocket recibido en ChatsPage:', message);
           
           if (message.type === 'new_message' && message.phone_number) {
@@ -129,10 +176,16 @@ const ChatsPage = () => {
         console.log('❌ Conexión WebSocket cerrada', event.code, event.reason);
         setIsConnected(false);
         
-        // No intentar reconectar si fue un cierre limpio (código 1000)
-        if (event.code === 1000) {
-          console.log('Conexión cerrada limpiamente por el servidor');
+        // No intentar reconectar si fue un cierre limpio (código 1000 o 1001)
+        if ([1000, 1001].includes(event.code)) {
+          console.log('Conexión cerrada limpiamente');
           return;
+        }
+        
+        // Manejar código de error 1006 (Conexión cerrada anormalmente)
+        if (event.code === 1006) {
+          console.warn('⚠️ Conexión cerrada inesperadamente. Verifica la red o el servidor.');
+          setError && setError('Se perdió la conexión. Reconectando...');
         }
 
         // Intentar reconectar con backoff exponencial
@@ -151,6 +204,7 @@ const ChatsPage = () => {
       ws.current.onerror = (error) => {
         console.error('❌ Error en la conexión WebSocket:', error);
         setIsConnected(false);
+        setError && setError('Error de conexión WebSocket');
       };
     } catch (err) {
       console.error('❌ Error al crear la conexión WebSocket:', err);
@@ -167,6 +221,12 @@ const ChatsPage = () => {
       console.log('🧹 Limpiando conexión WebSocket');
       if (reconnectTimeout.current) {
         clearTimeout(reconnectTimeout.current);
+      }
+      if (pingInterval.current) {
+        clearInterval(pingInterval.current);
+      }
+      if (pongTimeout.current) {
+        clearTimeout(pongTimeout.current);
       }
       if (ws.current) {
         ws.current.close(1000, 'Componente desmontado');
@@ -188,6 +248,14 @@ const ChatsPage = () => {
   useEffect(() => {
     console.log('🔌 Estado de conexión actualizado:', isConnected ? 'CONECTADO' : 'DESCONECTADO');
   }, [isConnected]);
+  
+  // Mostrar errores al usuario si es necesario
+  useEffect(() => {
+    if (error) {
+      console.log('⚠️ Error mostrado al usuario:', error);
+      // Aquí podrías mostrar el error en la UI si lo deseas
+    }
+  }, [error]);
 
   return (
     <>

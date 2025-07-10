@@ -27,19 +27,43 @@ const CustomLink = ({ node, ...props }) => (
 // Componente personalizado para el código
 const CodeBlock = ({ node, inline, className, children, ...props }) => {
   const match = /language-(\w+)/.exec(className || '');
-  return !inline ? (
-    <SyntaxHighlighter
-      style={oneDark}
-      language={match ? match[1] : 'javascript'}
-      PreTag="div"
-      {...props}
-    >
-      {String(children).replace(/\n$/, '')}
-    </SyntaxHighlighter>
-  ) : (
-    <code className={className} {...props}>
-      {children}
-    </code>
+  
+  if (inline) {
+    return (
+      <code className={className} {...props}>
+        {children}
+      </code>
+    );
+  }
+  
+  // Para bloques de código, usamos un componente separado que no estará dentro de un párrafo
+  return (
+    <div className="code-block-wrapper" style={{ margin: '16px 0' }}>
+      <SyntaxHighlighter
+        style={oneDark}
+        language={match ? match[1] : 'javascript'}
+        customStyle={{
+          margin: 0,
+          padding: '16px',
+          borderRadius: '8px',
+          fontSize: '0.9em',
+          lineHeight: 1.5
+        }}
+        codeTagProps={{
+          style: {
+            fontFamily: 'monospace',
+            display: 'block',
+            whiteSpace: 'pre-wrap',
+            wordBreak: 'break-word'
+          }
+        }}
+        wrapLines={true}
+        wrapLongLines={true}
+        {...props}
+      >
+        {String(children).replace(/\n$/, '')}
+      </SyntaxHighlighter>
+    </div>
   );
 };
 
@@ -304,6 +328,38 @@ const ChatWindow = ({ selectedChat, isConnected, ...props }) => {
       <PersonIcon sx={{ fontSize: 18.5, opacity: 0.7}} />; // como no son los mismos colores la apriencia de tamanho no es la misma
   };
 
+  // Configuración de componentes para ReactMarkdown
+  const components = {
+    a: CustomLink,
+    code: CodeBlock,
+    // Evitar que los bloques de código se envuelvan en párrafos
+    p: ({ node, ...props }) => {
+      // Si el párrafo solo contiene un bloque de código, lo renderizamos sin párrafo
+      if (node?.children?.length === 1 && node.children[0].tagName === 'pre') {
+        return <>{props.children}</>;
+      }
+      return <p style={{ margin: '0.5em 0', lineHeight: 1.6 }} {...props} />;
+    },
+    // Estilos para otros elementos
+    ul: ({ node, ...props }) => <ul style={{ margin: '0.5em 0', paddingLeft: '1.5em' }} {...props} />,
+    ol: ({ node, ...props }) => <ol style={{ margin: '0.5em 0', paddingLeft: '1.5em' }} {...props} />,
+    li: ({ node, ...props }) => <li style={{ margin: '0.25em 0' }} {...props} />,
+    h1: ({ node, ...props }) => <h1 style={{ fontSize: '1.8em', margin: '0.8em 0 0.4em' }} {...props} />,
+    h2: ({ node, ...props }) => <h2 style={{ fontSize: '1.5em', margin: '0.8em 0 0.4em' }} {...props} />,
+    h3: ({ node, ...props }) => <h3 style={{ fontSize: '1.3em', margin: '0.8em 0 0.4em' }} {...props} />,
+    blockquote: ({ node, ...props }) => (
+      <blockquote 
+        style={{
+          margin: '0.5em 0', 
+          padding: '0 1em',
+          borderLeft: '4px solid #dfe2e5',
+          color: '#6a737d'
+        }} 
+        {...props} 
+      />
+    ),
+  };
+
   return (
     <Box
       ref={chatWindowRef}
@@ -542,14 +598,16 @@ const ChatWindow = ({ selectedChat, isConnected, ...props }) => {
                                   margin: '0.5em 0'
                                 }
                               }}>
-                                <ReactMarkdown
-                                  components={{
-                                    a: CustomLink,
-                                    code: CodeBlock
-                                  }}
-                                >
-                                  {messageText}
-                                </ReactMarkdown>
+                                <div className="markdown-content" style={{ lineHeight: 1.6, wordBreak: 'break-word' }}>
+                                  <ReactMarkdown
+                                    components={components}
+                                    skipHtml={true}
+                                    unwrapDisallowed={true}
+                                    allowedElements={['p', 'pre', 'code', 'a', 'strong', 'em', 'ul', 'ol', 'li', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'blockquote', 'hr', 'br']}
+                                  >
+                                    {messageText}
+                                  </ReactMarkdown>
+                                </div>
                               </Box>
                             ) : (
                               <Typography variant="body2" color="text.secondary" fontStyle="italic">
