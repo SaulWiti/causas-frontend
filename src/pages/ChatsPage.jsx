@@ -14,7 +14,7 @@ const ChatsPage = () => {
   const pingInterval = useRef(null);
   const pongTimeout = useRef(null);
   const lastPongTime = useRef(Date.now());
-  const PING_INTERVAL = 10000; // 10 segundos (menos que el timeout de Azure de 4 minutos)
+  const PING_INTERVAL = 60000; // 1 minuto (menos que el timeout de Azure de 4 minutos)
   const PONG_TIMEOUT = 5000; // 5 segundos para recibir respuesta
 
   const startPing = useCallback(() => {
