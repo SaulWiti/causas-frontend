@@ -141,7 +141,7 @@ function CausaForm() {
     if (!tareaSeleccionada) return;
     
     try {
-      await axios.delete(`${API_URL}/tareas/${tareaSeleccionada.id_tarea}`, {
+      await axios.delete(`${API_URL}/tareas/${tareaSeleccionada.id_tarea}/`, {
         headers: { 'api-key-auth': import.meta.env.VITE_API_KEY_AUTH }
       });
       
